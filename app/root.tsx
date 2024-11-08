@@ -12,11 +12,12 @@ import globalStyles from './styles/index.scss?url';
 import xtermStyles from '@xterm/xterm/css/xterm.css?url';
 
 import 'virtual:uno.css';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 
 export const links: LinksFunction = () => [
   {
     rel: 'icon',
-    href: '/favicon.svg',
+    href: '/logo.svg',
     type: 'image/svg+xml',
   },
   { rel: 'stylesheet', href: reactToastifyStyles },
@@ -92,5 +93,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  return(
+    <GoogleOAuthProvider clientId="347888977241-qci3n0kcfp6udf8dqctdjdhk07rf7avj.apps.googleusercontent.com">
+      <Outlet />
+    </GoogleOAuthProvider>
+  );
 }

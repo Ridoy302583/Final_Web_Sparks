@@ -1,0 +1,2 @@
+[mask-image:linear-gradient(to_bottom,black_0%,transparent_180%)]
+hover:[mask-image:none]

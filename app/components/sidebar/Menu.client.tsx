@@ -33,11 +33,17 @@ const menuVariants = {
 
 type DialogContent = { type: 'delete'; item: ChatHistoryItem } | null;
 
-export function Menu() {
+export function Menu(chatStarted:any) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [list, setList] = useState<ChatHistoryItem[]>([]);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [dialogContent, setDialogContent] = useState<DialogContent>(null);
+  const [isExpanded, setIsExpanded] = useState(!chatStarted);
+  
+  // Effect to handle chat status changes
+  useEffect(() => {
+    setIsExpanded(!chatStarted);
+  }, [chatStarted]);
 
   const loadEntries = useCallback(() => {
     if (db) {
@@ -73,10 +79,14 @@ export function Menu() {
   };
 
   useEffect(() => {
+    console.log("Ok: ", chatStarted)
+    if(chatStarted.chatStarted === true){
+      setOpen(false);
+    }
     if (open) {
       loadEntries();
     }
-  }, [open]);
+  }, [open, chatStarted]);
 
   useEffect(() => {
     const enterThreshold = 40;
@@ -84,11 +94,11 @@ export function Menu() {
 
     function onMouseMove(event: MouseEvent) {
       if (event.pageX < enterThreshold) {
-        setOpen(true);
+        // setOpen(true);
       }
 
       if (menuRef.current && event.clientX > menuRef.current.getBoundingClientRect().right + exitThreshold) {
-        setOpen(false);
+        // setOpen(true);
       }
     }
 
@@ -102,7 +112,7 @@ export function Menu() {
   return (
     <motion.div
       ref={menuRef}
-      initial="closed"
+      initial="open"
       animate={open ? 'open' : 'closed'}
       variants={menuVariants}
       className="flex flex-col side-menu fixed top-0 w-[350px] h-full bg-bolt-elements-background-depth-2 border-r rounded-r-3xl border-bolt-elements-borderColor z-sidebar shadow-xl shadow-bolt-elements-sidebar-dropdownShadow text-sm"
