@@ -13,9 +13,11 @@ import VerificationCode from '../auth/VerificationCode';
 import EnterEmail from '../auth/ForgotPass/EnterEmail';
 import ForgetVerficationCode from '../auth/ForgotPass/ForgetVerficationCode';
 import PasswordSet from '../auth/ForgotPass/PasswordSet';
+import useAuth from '../auth/useAuth';
 
 export function Header() {
   const chat = useStore(chatStore);
+  const { authState, logout } = useAuth();
   const [forgotVerificationEmail, setForgotVerificationEmail] = useState<string | null>(null);
   const [forgotPassCode, setForgotPassCode] = useState<string | null>(null);
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
@@ -73,6 +75,8 @@ export function Header() {
     setSignUpOpen(false);
   };
 
+  console.log(authState)
+
   return (
     <>
       <header
@@ -96,7 +100,7 @@ export function Header() {
         <span className="flex-1 px-4 truncate text-center text-bolt-elements-textPrimary">
           <ClientOnly>{() => <ChatDescription />}</ClientOnly>
         </span>
-        {chat.started ? (
+        {chat.started && (
           <ClientOnly>
             {() => (
               <div className="mr-1">
@@ -104,7 +108,8 @@ export function Header() {
               </div>
             )}
           </ClientOnly>
-        ) : (
+        )}
+        {!authState.access_token && (
           <Box display={'flex'} gap={1} alignItems={'center'}>
             <Box onClick={() => handleSignInOpen()} sx={{ cursor: 'pointer' }}>
               <Box border={'1px solid'} borderRadius={2} py={0.5} px={2} className={'border border-bolt-elements-borderColor'}>
@@ -118,7 +123,6 @@ export function Header() {
             </Box>
           </Box>
         )}
-
       </header>
       <Login
         signinOpen={signinOpen}

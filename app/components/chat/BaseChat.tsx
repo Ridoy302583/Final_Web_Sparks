@@ -3,7 +3,7 @@
 import type { Message } from 'ai';
 import React, { type RefCallback, useRef, useEffect } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
-import { Menu } from '~/components/sidebar/Menu.client';
+import { MenuComponent } from '~/components/sidebar/Menu.client';
 import { IconButton } from '~/components/ui/IconButton';
 import { Workbench } from '~/components/workbench/Workbench.client';
 import { classNames } from '~/utils/classNames';
@@ -404,7 +404,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             <i className="bi bi-chevron-right text-bolt-elements-textPrimary"></i>
           </Box>
         </Box>
-        <ClientOnly>{() => <Menu chatStarted={chatStarted} />}</ClientOnly>
+        <ClientOnly>{() => <MenuComponent chatStarted={chatStarted} />}</ClientOnly>
         <div ref={scrollRef} className="flex overflow-y-auto w-full h-full">
           <div className={classNames(styles.Chat, 'flex flex-col flex-grow min-w-[var(--chat-min-width)] h-full')}>
             {!chatStarted && (

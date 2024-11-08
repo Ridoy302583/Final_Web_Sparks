@@ -1,8 +1,8 @@
-import { Box, Chip, Dialog, Divider, IconButton, InputAdornment, Link, TextField, Typography, useTheme } from '@mui/material'
-import React, { useState } from 'react'
-// import SocialLogin from './SocialLogin'
-import Logo from '../../../icons/roundedlogo.svg'
+import { Box, Chip, Dialog, Divider, IconButton, InputAdornment, Link, TextField, Typography, useTheme } from '@mui/material';
+import React, { useState } from 'react';
 import SocialLogin from './SocialLogin';
+import Logo from '../../../icons/roundedlogo.svg';
+import useAuth from './useAuth';
 
 interface LoginProps {
     signinOpen: boolean;
@@ -17,13 +17,12 @@ interface FormData {
 }
 
 const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSignUpOpen, handleEnterEmailOpen }) => {
-    const theme = useTheme();
+    const { login } = useAuth(); // Use the auth hook
 
     const [formData, setFormData] = useState<FormData>({
         email: '',
         password: '',
     });
-    const [error, setError] = useState<string>();
     const [showPassword, setShowPassword] = useState(false);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,42 +37,12 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
         setShowPassword((prev) => !prev);
     };
 
-    const SignIn = async (Email: string, PassCode: string) => {
-        const data = {
-            email: Email,
-            password: PassCode
-        };
-        try {
-            const response = await fetch(`$/signin`, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data),
-            });
-    
-            if (!response.ok) {
-                const errorMessage = await response.json();
-                // setError(errorMessage.detail);
-                // throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage.detail}`);
-            }
-            const responseData = await response.json();
-            return responseData;
-        } catch (error) {
-            console.error('Error during sign in:', error);
-        }
-    };    
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const result = await SignIn(formData.email, formData.password);
-        console.log(result)
-        // if(result){
-        //     localStorage.setItem('token', result.access_token);
-        //     localStorage.setItem('default_project', result.default_project_id);
-        //     window.location.reload();
-        // }
+        const success = await login(formData.email, formData.password);
+        if (success) {
+            handleSignInClose();
+        }
     };
 
     return (
@@ -96,9 +65,7 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                 },
             }}
         >
-            <Box
-                p={3}
-            >
+            <Box p={3}>
                 <Box width={'100%'} display={'flex'} justifyContent={'center'}>
                     <Box
                         component={'img'}
@@ -146,18 +113,18 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                                         borderColor: '#d0d0d0',
                                         borderRadius: '15px',
                                     },
-                                    '& input': {  // Input text font
+                                    '& input': {
                                         fontFamily: '"Montserrat", sans-serif'
                                     },
-                                    '& input::placeholder': {  // Placeholder font
+                                    '& input::placeholder': {
                                         fontFamily: '"Montserrat", serif',
-                                        opacity: 0.7  // Optional: adjust placeholder opacity
+                                        opacity: 0.7
                                     },
                                     '&:hover fieldset': {
-                                        borderColor: '#d0d0d0', // Hover border color
+                                        borderColor: '#d0d0d0',
                                     },
                                     '&.Mui-focused fieldset': {
-                                        borderColor: '#d0d0d0', // Focus border color
+                                        borderColor: '#d0d0d0',
                                     },
                                 },
                             }}
@@ -172,24 +139,24 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                             value={formData.password}
                             onChange={handleChange}
                             sx={{
-                                mt:2,
+                                mt: 2,
                                 '& .MuiOutlinedInput-root': {
                                     '& fieldset': {
                                         borderColor: '#d0d0d0',
                                         borderRadius: '15px',
                                     },
-                                    '& input': {  // Input text font
+                                    '& input': {
                                         fontFamily: '"Montserrat", sans-serif'
                                     },
-                                    '& input::placeholder': {  // Placeholder font
+                                    '& input::placeholder': {
                                         fontFamily: '"Montserrat", serif',
-                                        opacity: 0.7  // Optional: adjust placeholder opacity
+                                        opacity: 0.7
                                     },
                                     '&:hover fieldset': {
-                                        borderColor: '#d0d0d0', // Hover border color
+                                        borderColor: '#d0d0d0',
                                     },
                                     '&.Mui-focused fieldset': {
-                                        borderColor: '#d0d0d0', // Focus border color
+                                        borderColor: '#d0d0d0',
                                     },
                                 },
                             }}
@@ -211,13 +178,17 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                                 <p>Forgot Password?</p>
                             </Link>
                         </Box>
-                        {error && (
-                            <Box mt={2}>
-                                <Typography fontFamily={'Montserrat'} fontWeight={700} textAlign={'center'} color='red'>{error}</Typography>
-                            </Box>
-                        )}
                         <Box mt={2}>
-                            <Box onClick={handleSubmit} display={'flex'} justifyContent={'center'} alignItems={'center'} p={1} border={`1px solid `} borderRadius={3} sx={{background:'#000', color:'#FFF', cursor:'pointer' }}>
+                            <Box 
+                                onClick={handleSubmit} 
+                                display={'flex'} 
+                                justifyContent={'center'} 
+                                alignItems={'center'} 
+                                p={1} 
+                                border={`1px solid`} 
+                                borderRadius={3} 
+                                sx={{background:'#000', color:'#FFF', cursor:'pointer' }}
+                            >
                                 <span style={{marginRight:'5px'}}>Login</span>
                                 <i className="bi bi-arrow-right"></i>
                             </Box>
@@ -240,7 +211,7 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                 </Box>
             </Box>
         </Dialog>
-    )
-}
+    );
+};
 
 export default Login;
