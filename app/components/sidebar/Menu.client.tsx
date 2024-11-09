@@ -6,6 +6,9 @@ import { ThemeSwitch } from '~/components/ui/ThemeSwitch';
 import { db, deleteById, getAll, chatId, type ChatHistoryItem } from '~/lib/persistence';
 import { cubicEasingFn } from '~/utils/easings';
 import { logger } from '~/utils/logger';
+import { useStore } from '@nanostores/react';
+import { chatStore } from '~/lib/stores/chat';
+import { workbenchStore } from '~/lib/stores/workbench';
 import { HistoryItem } from './HistoryItem';
 import { binDates } from './date-binning';
 import { Box, Divider, FormControl, Menu, MenuItem, OutlinedInput, Select, Typography } from '@mui/material';
@@ -14,6 +17,7 @@ import React from 'react';
 import useAuth from '../auth/useAuth';
 import useUser from '~/types/user';
 import { authStore } from '../auth/authStore';
+import { themeStore } from '~/lib/stores/theme';
 
 const menuVariants = {
   closed: {
@@ -38,20 +42,37 @@ const menuVariants = {
 
 type DialogContent = { type: 'delete'; item: ChatHistoryItem } | null;
 
-export function MenuComponent({ chatStarted }: { chatStarted: boolean }) {
+interface HeaderProps{
+  isStreaming:boolean;
+  setPricingOpen: (open: boolean) => void;
+}
+
+export const MenuComponent:React.FC <HeaderProps> =({ isStreaming, setPricingOpen })=> {
   const menuRef = useRef<HTMLDivElement>(null);
-  const { authState, logout } = useAuth();
+  const { logout, authState } = useAuth();
   const [list, setList] = useState<ChatHistoryItem[]>([]);
   const [open, setOpen] = useState<boolean>(true);
   const [dialogContent, setDialogContent] = useState<DialogContent>(null);
-  const [isExpanded, setIsExpanded] = useState(!chatStarted);
+  const [isExpanded, setIsExpanded] = useState(!isStreaming);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [language, setLanguage] = useState('en');
-
   // Use the useUser hook
-  const { user, loading, error } = useUser(authState.access_token || '');
-
+  const { user, loading, error, getStoredToken } = useUser();
+  const token = getStoredToken()
   const openMenu = Boolean(anchorEl);
+
+  const showWorkbench = useStore(workbenchStore.showWorkbench);
+  const { showChat } = useStore(chatStore);
+
+  useEffect(() => {
+    const canHideChat = showWorkbench || !showChat;
+    if (canHideChat) {
+      setOpen(false);
+    }
+    else{
+      setOpen(true)
+    }
+  }, [showWorkbench, showChat]);
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -64,6 +85,22 @@ export function MenuComponent({ chatStarted }: { chatStarted: boolean }) {
   const handleLanguageChange = (event: any) => {
     setLanguage(event.target.value);
   };
+
+  const handlePricingOpen =()=>{
+    setPricingOpen(true);
+  }
+
+  useEffect(() => {
+    if (loading || error) {
+      setOpen(false);
+    }
+    if(token){
+      setOpen(true)
+    }
+    else{
+      setOpen(false)
+    }
+  }, [loading, error, token]);
 
   const loadEntries = useCallback(() => {
     if (db) {
@@ -94,18 +131,18 @@ export function MenuComponent({ chatStarted }: { chatStarted: boolean }) {
 
   // Effect for chat started state
   useEffect(() => {
-    setIsExpanded(!chatStarted);
-  }, [chatStarted]);
+    setIsExpanded(!isStreaming);
+  }, [isStreaming]);
 
   // Effect for loading entries
   useEffect(() => {
-    if (chatStarted) {
+    if (isStreaming) {
       setOpen(false);
     }
     if (open) {
       loadEntries();
     }
-  }, [open, chatStarted, loadEntries]);
+  }, [open, isStreaming, loadEntries]);
 
   // Effect for mouse movement
   useEffect(() => {
@@ -115,7 +152,12 @@ export function MenuComponent({ chatStarted }: { chatStarted: boolean }) {
     function onMouseMove(event: MouseEvent) {
       if (event.pageX < enterThreshold) {
         // Commented out as per original code
-        // setOpen(true);
+        if(token){
+          setOpen(true)
+        }
+        else{
+          setOpen(false)
+        }
       }
 
       if (menuRef.current && event.clientX > menuRef.current.getBoundingClientRect().right + exitThreshold) {
@@ -126,31 +168,17 @@ export function MenuComponent({ chatStarted }: { chatStarted: boolean }) {
 
     window.addEventListener('mousemove', onMouseMove);
     return () => window.removeEventListener('mousemove', onMouseMove);
-  }, []);
+  }, [token]);
 
   const closeDialog = () => {
     setDialogContent(null);
   };
 
-  // Early return for loading and error states
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Typography>Loading...</Typography>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Typography color="error">Error loading user data</Typography>
-      </div>
-    );
-  }
-
   const handleClickLogout=()=>{
-    logout(authState.access_token || "")
+    logout(getStoredToken() || '')
+  }
+  const handleHideMenu=()=>{
+    setOpen(false)
   }
 
   return (
@@ -218,7 +246,7 @@ export function MenuComponent({ chatStarted }: { chatStarted: boolean }) {
           </DialogRoot>
         </div>
         <div className="flex items-center border-t border-bolt-elements-borderColor p-4">
-          <Box onClick={handleClick}>
+          <Box onClick={handleClick} sx={{cursor:'pointer'}}>
             <Box display="flex" alignItems="center">
               {user?.profile_pic && (
                 <Box
@@ -231,19 +259,19 @@ export function MenuComponent({ chatStarted }: { chatStarted: boolean }) {
                 />
               )}
               <Box ml={1}>
-                <Typography fontFamily="Montserrat" fontWeight={700}>
+                <Typography className='text-bolt-elements-textPrimary' fontFamily="Montserrat" fontWeight={700}>
                   {user?.full_name || 'User'}
                 </Typography>
-                <Typography fontFamily="Montserrat" fontSize={12}>
+                <Typography className='text-bolt-elements-textPrimary' fontFamily="Montserrat" fontSize={12}>
                   Free
                 </Typography>
               </Box>
             </Box>
           </Box>
           <ThemeSwitch className="ml-auto" />
-          <Box component="button" onClick={handleClick} className="ml-2">
+          {/* <Box component="button" onClick={handleClick} className="ml-2">
             <i className="bi bi-three-dots-vertical"></i>
-          </Box>
+          </Box> */}
           <Menu
             anchorEl={anchorEl}
             id="account-menu"
@@ -339,12 +367,12 @@ export function MenuComponent({ chatStarted }: { chatStarted: boolean }) {
               </Box>
               <Divider />
               <Box px={2} py={0.5} pb={2}>
-                <Link
-                  to="/pricing"
-                  target="_blank"
+                <Box
+                  onClick={handlePricingOpen}
                   style={{
                     textDecoration: 'none',
                     color: '#000',
+                    cursor:'pointer'
                   }}
                 >
                   <Box pt={1.5} sx={{ cursor: 'pointer' }}>
@@ -353,7 +381,7 @@ export function MenuComponent({ chatStarted }: { chatStarted: boolean }) {
                       Billing
                     </Typography>
                   </Box>
-                </Link>
+                </Box>
                 <Box pt={1.5} sx={{ cursor: 'pointer' }}>
                   <i className="bi bi-arrow-repeat"></i>
                   <Typography fontFamily="Montserrat" component="span" mx={1}>
@@ -438,6 +466,9 @@ export function MenuComponent({ chatStarted }: { chatStarted: boolean }) {
           </Menu>
         </div>
       </div>
+      <Box position={'absolute'} right={10} top={20} sx={{cursor:'pointer'}} onClick={handleHideMenu}>
+        <i className='bi bi-chevron-left text-bolt-elements-textPrimary' style={{fontSize:16}}></i>
+      </Box>
     </motion.div>
   );
 }

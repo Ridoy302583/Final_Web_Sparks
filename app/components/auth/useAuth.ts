@@ -9,6 +9,11 @@ const useAuth = () => {
         login: authActions.login,
         register: authActions.register,
         logout: authActions.logout,
+        verifyEmail: authActions.verifyEmail,
+        resendVerificationCode: authActions.resendVerificationCode,
+        sendForgotPasswordOtp: authActions.sendForgotPasswordOtp,
+        verifyForgotPasswordOtp: authActions.verifyForgotPasswordOtp,
+        resetPassword:authActions.resetPassword,
     };
 };
 

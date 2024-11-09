@@ -3,6 +3,8 @@ import React from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
+import useUser from '~/types/user';
+import { Box, CircularProgress } from '@mui/material';
 
 interface MessagesProps {
   id?: string;
@@ -13,7 +15,7 @@ interface MessagesProps {
 
 export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: MessagesProps, ref) => {
   const { id, isStreaming = false, messages = [] } = props;
-
+  const { user, loading, error, getStoredToken } = useUser();
   return (
     <div id={id} ref={ref} className={props.className} >
       {messages.length > 0
@@ -34,8 +36,18 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
                 })}
               >
                 {isUserMessage && (
-                  <div className="flex items-center justify-center w-[34px] h-[34px] overflow-hidden bg-white text-gray-600 rounded-full shrink-0 self-start">
-                    <div className="i-ph:user-fill text-xl"></div>
+                  <div className="mt-1.5 flex items-center justify-center w-[20px] h-[20px] overflow-hidden bg-white text-gray-600 rounded-full shrink-0 self-start">
+                    {user?.profile_pic && (
+                      <Box
+                        component="img"
+                        height={20}
+                        width={20}
+                        borderRadius={2}
+                        src={user.profile_pic}
+                        alt={user.full_name}
+                      />
+                    )}
+                    {/* <div className="i-ph:user-fill text-xl"></div> */}
                   </div>
                 )}
                 <div className="grid grid-col-1 w-full">
@@ -47,6 +59,7 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
         : null}
       {isStreaming && (
         <div className="text-center w-full text-bolt-elements-textSecondary i-svg-spinners:3-dots-fade text-4xl mt-4"></div>
+        // <CircularProgress size={18} thickness={2} color='success' />
       )}
     </div>
   );

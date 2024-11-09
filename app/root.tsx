@@ -37,6 +37,7 @@ export const links: LinksFunction = () => [
     rel: 'stylesheet',
     href: 'https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap',
   },
+  
   {
     rel: 'stylesheet',
     href: 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css',
@@ -70,6 +71,7 @@ export const Head = createHead(() => (
   <>
     <meta charSet="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {/* <meta http-equiv="Content-Security-Policy" content="script-src 'self' https://accounts.google.com/gsi/client https://apis.google.com" /> */}
     <Meta />
     <Links />
     <script dangerouslySetInnerHTML={{ __html: inlineThemeCode }} />
@@ -94,7 +96,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return(
-    <GoogleOAuthProvider clientId="347888977241-qci3n0kcfp6udf8dqctdjdhk07rf7avj.apps.googleusercontent.com">
+    <GoogleOAuthProvider clientId={'import.meta.env.VITE_GOOGLE_CLIENT_ID'} >
       <Outlet />
     </GoogleOAuthProvider>
   );

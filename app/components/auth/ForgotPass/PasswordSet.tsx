@@ -1,6 +1,7 @@
-import { Box, Chip, Dialog, Divider, IconButton, InputAdornment, TextField, Typography, useTheme } from '@mui/material';
+import { Box, Chip, Dialog, Divider, IconButton, InputAdornment, TextField, Typography } from '@mui/material';
 import React, { useState } from 'react';
-import Logo from '../../../../icons/roundedlogo.svg'
+import Logo from '../../../../icons/roundedlogo.svg';
+import useAuth from '../useAuth';
 
 interface PasswordSetProps {
     passwordSetOpen: boolean;
@@ -14,29 +15,36 @@ interface FormData {
     confirmpassword: string;
 }
 
-const PasswordSet: React.FC<PasswordSetProps> = ({ passwordSetOpen, email, code, handleSignInOpen }) => {
-
+const PasswordSet: React.FC<PasswordSetProps> = ({ 
+    passwordSetOpen, 
+    email, 
+    code, 
+    handleSignInOpen 
+}) => {
+    const { resetPassword } = useAuth();
     const [formData, setFormData] = useState<FormData>({
         newpassword: '',
         confirmpassword: '',
     });
-    const [error, setError] = useState<string>();
+    const [error, setError] = useState<string>('');
+    const [loading, setLoading] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({
-            ...formData,
+        setFormData(prev => ({
+            ...prev,
             [event.target.id]: event.target.value,
-        });
+        }));
+        setError(''); // Clear error when user types
     };
 
     const handleToggleNewPasswordVisibility = () => {
-        setShowNewPassword((prev) => !prev);
+        setShowNewPassword(prev => !prev);
     };
 
     const handleToggleConfirmPasswordVisibility = () => {
-        setShowConfirmPassword((prev) => !prev);
+        setShowConfirmPassword(prev => !prev);
     };
 
     const validatePassword = (password: string) => {
@@ -44,39 +52,17 @@ const PasswordSet: React.FC<PasswordSetProps> = ({ passwordSetOpen, email, code,
         return regex.test(password);
     };
 
-    const PassChange = async (Email: string, Code: string, PassCode: string) => {
-        const data = {
-            email: Email,
-            fp_code: Code,
-            new_password: PassCode
-        };
-        // try {
-        //     const response = await fetch(`${API_BASE_URL}/reset-password`, {
-        //         method: 'POST',
-        //         headers: {
-        //             'Accept': 'application/json',
-        //             'Content-Type': 'application/json',
-        //         },
-        //         body: JSON.stringify(data),
-        //     });
-
-        //     if (!response.ok) {
-        //         const errorMessage = await response.json();
-        //         setError(errorMessage.detail);
-        //         throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage.detail}`);
-        //     }
-        //     const responseData = await response.json();
-        //     return responseData;
-        // } catch (error) {
-        //     console.error('Error during sign in:', error);
-        // }
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!email || !code) {
+            setError('Email or verification code is missing');
+            return;
+        }
+
         if (!validatePassword(formData.newpassword)) {
             setError('Password must be at least 6 characters long, include an uppercase letter, a lowercase letter, a number, and a special character.');
-            return; 
+            return;
         }
 
         if (formData.newpassword !== formData.confirmpassword) {
@@ -84,27 +70,33 @@ const PasswordSet: React.FC<PasswordSetProps> = ({ passwordSetOpen, email, code,
             return;
         }
 
-        if (email && code) {
-            // const result = await PassChange(email, code, formData.newpassword);
-            // if(result){
-            //     handleSignInOpen();
-            //     setFormData({ newpassword: '', confirmpassword: '' }); 
-            // }
-        } else {
-            setError('Email or code cannot be null');
+        try {
+            setLoading(true);
+            const result = await resetPassword(email, code, formData.newpassword);
+
+            if (result.success) {
+                handleSignInOpen();
+                setFormData({ newpassword: '', confirmpassword: '' });
+            } else {
+                setError(result.message);
+            }
+        } catch (err) {
+            setError('An unexpected error occurred. Please try again.');
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
         <Dialog
             open={passwordSetOpen}
-            maxWidth={'lg'}
+            maxWidth="lg"
             sx={{
                 '& .MuiDialog-paper': {
                     borderRadius: '25px',
                     width: 600,
-                    border: `1px solid #d0d0d0`,
-                    background:'#FFF'
+                    border: '1px solid #d0d0d0',
+                    background: '#FFF'
                 },
             }}
             BackdropProps={{
@@ -115,33 +107,42 @@ const PasswordSet: React.FC<PasswordSetProps> = ({ passwordSetOpen, email, code,
             }}
         >
             <Box p={3}>
-                <Box width={'100%'} display={'flex'} justifyContent={'center'}>
+                <Box width="100%" display="flex" justifyContent="center">
                     <Box
-                        component={'img'}
+                        component="img"
                         src={Logo}
                         height={60}
-                        width={'auto'}
+                        width="auto"
                     />
                 </Box>
+
                 <Box my={3}>
                     <Typography
                         fontSize={24}
                         fontWeight={700}
-                        textAlign={'center'}
-                        id="dialog-title"
-                        fontFamily={'Montserrat'}
+                        textAlign="center"
+                        fontFamily="Montserrat"
                     >
-                        Setting For New Password
+                        Set New Password
                     </Typography>
-                    <Typography fontFamily={'Montserrat'} textAlign={'center'} id="dialog-description">
-                        Welcome back! Please sign in to continue
+                    <Typography 
+                        fontFamily="Montserrat" 
+                        textAlign="center"
+                    >
+                        Please enter your new password
                     </Typography>
                 </Box>
+
                 <Box my={2}>
                     <Divider>
-                        <Chip label="Or" size="small" sx={{fontFamily: '"Montserrat", sans-serif'}} />
+                        <Chip 
+                            label="Or" 
+                            size="small" 
+                            sx={{ fontFamily: 'Montserrat' }} 
+                        />
                     </Divider>
                 </Box>
+
                 <form onSubmit={handleSubmit}>
                     <Box>
                         <TextField
@@ -160,18 +161,12 @@ const PasswordSet: React.FC<PasswordSetProps> = ({ passwordSetOpen, email, code,
                                         borderColor: '#d0d0d0',
                                         borderRadius: '15px',
                                     },
-                                    '& input': {  // Input text font
-                                        fontFamily: '"Montserrat", sans-serif'
+                                    '& input': {
+                                        fontFamily: 'Montserrat, sans-serif'
                                     },
-                                    '& input::placeholder': {  // Placeholder font
-                                        fontFamily: '"Montserrat", serif',
-                                        opacity: 0.7  // Optional: adjust placeholder opacity
-                                    },
-                                    '&:hover fieldset': {
-                                        borderColor: '#d0d0d0',
-                                    },
-                                    '&.Mui-focused fieldset': {
-                                        borderColor: '#d0d0d0',
+                                    '& input::placeholder': {
+                                        fontFamily: 'Montserrat, serif',
+                                        opacity: 0.7
                                     },
                                 },
                             }}
@@ -182,17 +177,21 @@ const PasswordSet: React.FC<PasswordSetProps> = ({ passwordSetOpen, email, code,
                                             onClick={handleToggleNewPasswordVisibility}
                                             edge="end"
                                         >
-                                            {showNewPassword ? <i className="bi bi-eye-slash"></i> : <i className="bi bi-eye"></i>}
+                                            {showNewPassword ? 
+                                                <i className="bi bi-eye-slash" /> : 
+                                                <i className="bi bi-eye" />
+                                            }
                                         </IconButton>
                                     </InputAdornment>
                                 ),
                             }}
                         />
+
                         <TextField
                             required
                             type={showConfirmPassword ? 'text' : 'password'}
                             id="confirmpassword"
-                            placeholder="Enter Your Confirm Password"
+                            placeholder="Confirm Your New Password"
                             fullWidth
                             variant="outlined"
                             value={formData.confirmpassword}
@@ -204,18 +203,12 @@ const PasswordSet: React.FC<PasswordSetProps> = ({ passwordSetOpen, email, code,
                                         borderColor: '#d0d0d0',
                                         borderRadius: '15px',
                                     },
-                                    '& input': {  // Input text font
-                                        fontFamily: '"Montserrat", sans-serif'
+                                    '& input': {
+                                        fontFamily: 'Montserrat, sans-serif'
                                     },
-                                    '& input::placeholder': {  // Placeholder font
-                                        fontFamily: '"Montserrat", serif',
-                                        opacity: 0.7  // Optional: adjust placeholder opacity
-                                    },
-                                    '&:hover fieldset': {
-                                        borderColor: '#d0d0d0',
-                                    },
-                                    '&.Mui-focused fieldset': {
-                                        borderColor: '#d0d0d0',
+                                    '& input::placeholder': {
+                                        fontFamily: 'Montserrat, serif',
+                                        opacity: 0.7
                                     },
                                 },
                             }}
@@ -226,42 +219,67 @@ const PasswordSet: React.FC<PasswordSetProps> = ({ passwordSetOpen, email, code,
                                             onClick={handleToggleConfirmPasswordVisibility}
                                             edge="end"
                                         >
-                                            {showConfirmPassword ? <i className="bi bi-eye-slash"></i> : <i className="bi bi-eye"></i>}
+                                            {showConfirmPassword ? 
+                                                <i className="bi bi-eye-slash" /> : 
+                                                <i className="bi bi-eye" />
+                                            }
                                         </IconButton>
                                     </InputAdornment>
                                 ),
                             }}
                         />
+
                         {error && (
                             <Box mt={2}>
-                                <Typography fontFamily={'Montserrat'} fontWeight={700} textAlign={'center'} color='red'>{error}</Typography>
+                                <Typography 
+                                    fontFamily="Montserrat" 
+                                    fontWeight={700} 
+                                    textAlign="center" 
+                                    color="red"
+                                >
+                                    {error}
+                                </Typography>
                             </Box>
                         )}
+
                         <Box mt={2}>
                             <Box
-                                onClick={handleSubmit}
-                                display={'flex'}
-                                justifyContent={'center'}
-                                alignItems={'center'}
+                                onClick={!loading ? handleSubmit : undefined}
+                                display="flex"
+                                justifyContent="center"
+                                alignItems="center"
                                 p={1}
-                                border={`1px solid #000`}
+                                border="1px solid #000"
                                 borderRadius={3}
-                                sx={{ background: '#000', cursor: 'pointer' }}
+                                sx={{ 
+                                    background: '#000', 
+                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                    opacity: loading ? 0.7 : 1,
+                                }}
                             >
-                                <Typography fontFamily={'Montserrat'} component={'span'} mr={1} color={'#FFF'}>
-                                    Continue
+                                <Typography 
+                                    fontFamily="Montserrat" 
+                                    component="span" 
+                                    mr={1} 
+                                    color="#FFF"
+                                >
+                                    {loading ? 'Processing...' : 'Continue'}
                                 </Typography>
-                                <i className="bi bi-arrow-right"></i>
+                                {!loading && <i className="bi bi-arrow-right" style={{ color: '#FFF' }} />}
                             </Box>
-                        </Box>
-                        <Box my={2}>
-                            <Divider />
-                        </Box>
-                        <Box display={'flex'} justifyContent={'center'} alignItems={'center'}>
-                            <span> Secure by <span style={{fontWeight:700}}>Websparks</span> </span>
                         </Box>
                     </Box>
                 </form>
+
+                <Box my={2}>
+                    <Divider />
+                </Box>
+
+                <Box display="flex" justifyContent="center" alignItems="center">
+                    <Typography fontFamily="Montserrat">
+                        Secure by <span style={{ fontWeight: 700 }}>Websparks</span>
+                    </Typography>
+                </Box>
             </Box>
         </Dialog>
     );

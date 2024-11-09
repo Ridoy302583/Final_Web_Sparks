@@ -14,19 +14,59 @@ import EnterEmail from '../auth/ForgotPass/EnterEmail';
 import ForgetVerficationCode from '../auth/ForgotPass/ForgetVerficationCode';
 import PasswordSet from '../auth/ForgotPass/PasswordSet';
 import useAuth from '../auth/useAuth';
+import useUser from '~/types/user';
 
-export function Header() {
+interface HeaderProps {
+  // Email verification states
+  forgotVerificationEmail: string | null;
+  setForgotVerificationEmail: (email: string | null) => void;
+  verificationEmail: string | null;
+  setVerificationEmail: (email: string | null) => void;
+
+  // Verification code state
+  forgotPassCode: string | null;
+  setForgotPassCode: (code: string | null) => void;
+
+  // Modal open/close states
+  isStreaming: boolean;
+  signinOpen: boolean;
+  setSignInOpen: (open: boolean) => void;
+  signUpOpen: boolean;
+  setSignUpOpen: (open: boolean) => void;
+  verficationOpen: boolean;
+  setVerificationOpen: (open: boolean) => void;
+  enterEmailOpen: boolean;
+  setEnterEmailOpen: (open: boolean) => void;
+  forgotVerificationOpen: boolean;
+  setForgotVerificationOpen: (open: boolean) => void;
+  passwordSetOpen: boolean;
+  setPasswordSetOpen: (open: boolean) => void;
+}
+export const Header = ({
+  forgotVerificationEmail,
+  setForgotVerificationEmail,
+  forgotPassCode,
+  setForgotPassCode,
+  verificationEmail,
+  setVerificationEmail,
+  isStreaming,
+  signinOpen,
+  setSignInOpen,
+  signUpOpen,
+  setSignUpOpen,
+  verficationOpen,
+  setVerificationOpen,
+  enterEmailOpen,
+  setEnterEmailOpen,
+  forgotVerificationOpen,
+  setForgotVerificationOpen,
+  passwordSetOpen,
+  setPasswordSetOpen
+}: HeaderProps) => {
   const chat = useStore(chatStore);
   const { authState, logout } = useAuth();
-  const [forgotVerificationEmail, setForgotVerificationEmail] = useState<string | null>(null);
-  const [forgotPassCode, setForgotPassCode] = useState<string | null>(null);
-  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
-  const [signinOpen, setSignInOpen] = useState(false);
-  const [signUpOpen, setSignUpOpen] = useState(false);
-  const [verficationOpen, setVerificationOpen] = useState(false);
-  const [enterEmailOpen, setEnterEmailOpen] = useState(false);
-  const [forgotVerificationOpen, setForgotVerificationOpen] = useState(false);
-  const [passwordSetOpen, setPasswordSetOpen] = useState(false);
+  const { user, loading, error, getStoredToken } = useUser();
+  const tokendata = getStoredToken();
 
   const handleSignInOpen = () => {
     setSignInOpen(true);
@@ -74,8 +114,15 @@ export function Header() {
     setVerificationOpen(true);
     setSignUpOpen(false);
   };
+  const handleVerficationClose = () => {
+    setVerificationOpen(false);
+    setSignUpOpen(false);
+    setSignInOpen(false);
+  };
 
   console.log(authState)
+  console.log("Streanibg:",isStreaming)
+  console.log(getStoredToken())
 
   return (
     <>
@@ -109,7 +156,7 @@ export function Header() {
             )}
           </ClientOnly>
         )}
-        {!authState.access_token && (
+        {!authState.access_token && !tokendata && (
           <Box display={'flex'} gap={1} alignItems={'center'}>
             <Box onClick={() => handleSignInOpen()} sx={{ cursor: 'pointer' }}>
               <Box border={'1px solid'} borderRadius={2} py={0.5} px={2} className={'border border-bolt-elements-borderColor'}>
@@ -141,6 +188,7 @@ export function Header() {
         handleVerificationOpen={handleVerficationOpen}
         email={verificationEmail}
         handleSignInOpen={handleSignInOpen}
+        handleVerficationClose={handleVerficationClose}
       />
       <EnterEmail
         enterEmailOpen={enterEmailOpen}

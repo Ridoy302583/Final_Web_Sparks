@@ -1,4 +1,4 @@
-import { Box, Chip, Dialog, Divider, IconButton, InputAdornment, Link, TextField, Typography, useTheme } from '@mui/material';
+import { Box, Chip, Dialog, Divider, IconButton, InputAdornment, Link, TextField, Typography, Alert } from '@mui/material';
 import React, { useState } from 'react';
 import SocialLogin from './SocialLogin';
 import Logo from '../../../icons/roundedlogo.svg';
@@ -16,14 +16,43 @@ interface FormData {
     password: string;
 }
 
-const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSignUpOpen, handleEnterEmailOpen }) => {
-    const { login } = useAuth(); // Use the auth hook
+interface FormErrors {
+    email?: string;
+    password?: string;
+    general?: string;
+}
 
+const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSignUpOpen, handleEnterEmailOpen }) => {
+    const { login } = useAuth();
     const [formData, setFormData] = useState<FormData>({
         email: '',
         password: '',
     });
     const [showPassword, setShowPassword] = useState(false);
+    const [errors, setErrors] = useState<FormErrors>({});
+    const [submitError, setSubmitError] = useState<string>('')
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const validateForm = () => {
+        const newErrors: FormErrors = {};
+        
+        // Email validation
+        if (!formData.email) {
+            newErrors.email = 'Email is required';
+        } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+            newErrors.email = 'Please enter a valid email address';
+        }
+        
+        // Password validation
+        if (!formData.password) {
+            newErrors.password = 'Password is required';
+        } else if (formData.password.length < 6) {
+            newErrors.password = 'Password must be at least 6 characters';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { id, value } = e.target;
@@ -31,6 +60,13 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
             ...prevState,
             [id]: value,
         }));
+        // Clear error when user starts typing
+        if (errors[id as keyof FormErrors]) {
+            setErrors(prev => ({
+                ...prev,
+                [id]: undefined
+            }));
+        }
     };
 
     const handleTogglePasswordVisibility = () => {
@@ -39,9 +75,34 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const success = await login(formData.email, formData.password);
-        if (success) {
-            handleSignInClose();
+        
+        if (!validateForm()) {
+            return;
+        }
+
+        setIsSubmitting(true);
+        setErrors({});
+
+        try {
+            const result = await login(formData.email, formData.password);
+            if (result.success) {
+                window.location.reload();
+                handleSignInClose();
+            } else {
+                if (result.message.toLowerCase().includes('user not found')) {
+                    setSubmitError('User not found with this email');
+                } else if (result.message.toLowerCase().includes('password')) {
+                    setSubmitError('Invalid password');
+                } else {
+                    setSubmitError( result.message || 'Login failed. Please try again.');
+                }
+            }
+        } catch (error) {
+            setErrors({
+                general: 'An error occurred during login. Please try again later.'
+            });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -88,6 +149,15 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                         Welcome back! Please sign in to continue
                     </Typography>
                 </Box>
+
+                {errors.general && (
+                    <Box mb={2}>
+                        <Alert severity="error" sx={{ borderRadius: '8px' }}>
+                            {errors.general}
+                        </Alert>
+                    </Box>
+                )}
+
                 <Box>
                     <SocialLogin />
                 </Box>
@@ -107,10 +177,12 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                             variant="outlined"
                             value={formData.email}
                             onChange={handleChange}
+                            error={!!errors.email}
+                            helperText={errors.email}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     '& fieldset': {
-                                        borderColor: '#d0d0d0',
+                                        borderColor: errors.email ? 'error.main' : '#d0d0d0',
                                         borderRadius: '15px',
                                     },
                                     '& input': {
@@ -121,10 +193,10 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                                         opacity: 0.7
                                     },
                                     '&:hover fieldset': {
-                                        borderColor: '#d0d0d0',
+                                        borderColor: errors.email ? 'error.main' : '#d0d0d0',
                                     },
                                     '&.Mui-focused fieldset': {
-                                        borderColor: '#d0d0d0',
+                                        borderColor: errors.email ? 'error.main' : '#d0d0d0',
                                     },
                                 },
                             }}
@@ -138,11 +210,13 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                             variant="outlined"
                             value={formData.password}
                             onChange={handleChange}
+                            error={!!errors.password}
+                            helperText={errors.password}
                             sx={{
                                 mt: 2,
                                 '& .MuiOutlinedInput-root': {
                                     '& fieldset': {
-                                        borderColor: '#d0d0d0',
+                                        borderColor: errors.password ? 'error.main' : '#d0d0d0',
                                         borderRadius: '15px',
                                     },
                                     '& input': {
@@ -153,10 +227,10 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                                         opacity: 0.7
                                     },
                                     '&:hover fieldset': {
-                                        borderColor: '#d0d0d0',
+                                        borderColor: errors.password ? 'error.main' : '#d0d0d0',
                                     },
                                     '&.Mui-focused fieldset': {
-                                        borderColor: '#d0d0d0',
+                                        borderColor: errors.password ? 'error.main' : '#d0d0d0',
                                     },
                                 },
                             }}
@@ -178,8 +252,16 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                                 <p>Forgot Password?</p>
                             </Link>
                         </Box>
+                        {submitError && (
+                            <Typography fontFamily={'Montserrat'} fontWeight={700} sx={{color:"red"}} textAlign="center">
+                                {submitError}
+                            </Typography>
+                        )}
                         <Box mt={2}>
                             <Box 
+                                component="button"
+                                type="submit"
+                                disabled={isSubmitting}
                                 onClick={handleSubmit} 
                                 display={'flex'} 
                                 justifyContent={'center'} 
@@ -187,10 +269,17 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                                 p={1} 
                                 border={`1px solid`} 
                                 borderRadius={3} 
-                                sx={{background:'#000', color:'#FFF', cursor:'pointer' }}
+                                sx={{
+                                    background: isSubmitting ? '#666' : '#000',
+                                    color: '#FFF',
+                                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                                    width: '100%',
+                                }}
                             >
-                                <span style={{marginRight:'5px'}}>Login</span>
-                                <i className="bi bi-arrow-right"></i>
+                                <span style={{marginRight:'5px'}}>
+                                    {isSubmitting ? 'Logging in...' : 'Login'}
+                                </span>
+                                {!isSubmitting && <i className="bi bi-arrow-right"></i>}
                             </Box>
                         </Box>
                     </Box>

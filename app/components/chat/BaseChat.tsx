@@ -7,64 +7,23 @@ import { MenuComponent } from '~/components/sidebar/Menu.client';
 import { IconButton } from '~/components/ui/IconButton';
 import { Workbench } from '~/components/workbench/Workbench.client';
 import { classNames } from '~/utils/classNames';
+import useUser from '~/types/user';
+import { useVariablesState } from '~/types/variables';
 import { MODEL_LIST, DEFAULT_PROVIDER } from '~/utils/constants';
 import { Messages } from './Messages.client';
 import { SendButton } from './SendButton.client';
 import { useState } from 'react';
-import Logo from '../../../icons/roundedlogo.svg'
-import SuggestIcon from '../../../icons/suggesticon.svg'
 import styles from './BaseChat.module.scss';
-import { Box, Link, Typography, Tooltip, Grid } from '@mui/material';
+import { Box, Link, Typography, Tooltip, Grid, Menu, Dialog, Slide } from '@mui/material';
+// import { TransitionProps } from "@mui/material/transitions";
+import WhiteBoard from './other/WhiteBoard';
+import Crawler from './other/Crawler';
 
 const EXAMPLE_PROMPTS = [
   { text: 'Build a todo app in React using Tailwind' },
   { text: 'Build a simple blog using Astro' },
   { text: 'Create a cookie consent form using Material UI' },
 ];
-
-const providerList = [...new Set(MODEL_LIST.map((model) => model.provider))]
-
-const ModelSelector = ({ model, setModel, modelList, providerList }) => {
-  const [provider, setProvider] = useState(DEFAULT_PROVIDER);
-  return (
-    <div className="mb-2">
-      <select
-        value={provider}
-        onChange={(e) => {
-          setProvider(e.target.value);
-          const firstModel = [...modelList].find(m => m.provider == e.target.value);
-          setModel(firstModel ? firstModel.name : '');
-        }}
-        className="w-full p-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-prompt-background text-bolt-elements-textPrimary focus:outline-none"
-      >
-        {providerList.map((provider) => (
-          <option key={provider} value={provider}>
-            {provider}
-          </option>
-        ))}
-        <option key="Ollama" value="Ollama">
-          Ollama
-        </option>
-        <option key="OpenAILike" value="OpenAILike">
-          OpenAILike
-        </option>
-      </select>
-      <select
-        value={model}
-        onChange={(e) => setModel(e.target.value)}
-        className="w-full p-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-prompt-background text-bolt-elements-textPrimary focus:outline-none"
-      >
-        {[...modelList].filter(e => e.provider == provider && e.name).map((modelOption) => (
-          <option key={modelOption.name} value={modelOption.name}>
-            {modelOption.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-};
-
-
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -83,6 +42,8 @@ interface BaseChatProps {
   model: string;
   setModel: (model: string) => void;
   handleStop?: () => void;
+  setSignInOpen: (open: boolean) => void;
+  setIsStreaming: (open: boolean) => void;
   sendMessage?: (event: React.UIEvent, messageInput?: string) => void;
   handleInputChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
   enhancePrompt?: () => void;
@@ -91,23 +52,23 @@ interface BaseChatProps {
 
 const footerLinks = [
   {
-    label: `pricing`,
+    label: `Pricing`,
     url: '/pricing'
   },
   {
-    label: `enterprice`,
+    label: `Enterprice`,
     url: '#'
   },
   {
-    label: `faq`,
+    label: `FAQ`,
     url: '#'
   },
   {
-    label: `terms`,
+    label: `Terms`,
     url: '#'
   },
   {
-    label: `privacy`,
+    label: `Privacy`,
     url: '#'
   },
   {
@@ -117,82 +78,24 @@ const footerLinks = [
   },
 ];
 
-const ProcessingCard = ({ title, subtitle, children }) => (
-  <div className="relative flex-1 rounded-3xl p-6 bg-bolt-elements-background-depth-2 cursor-pointer">
-    <div className="space-y-1 mb-8">
-      <p className="text-xs text-zinc-500">{subtitle}</p>
-      <p className="font-medium text-bolt-elements-textPrimary">{title}</p>
-    </div>
-    <div className="flex items-center justify-center h-40">
-      {children}
-    </div>
-    <div className="absolute bottom-6 left-6 right-6">
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span>time</span>
-        <span>Processing 90%</span>
-      </div>
-    </div>
-  </div>
-);
 
-const DropdownMenu = ({ isOpen, onClose, handleClick, fileInputRef, handleFileChange }) => {
-  const dropdownRef = useRef(null);
+import type { SlideProps } from "@mui/material/Slide";
+import Icon from '@mdi/react';
+import { mdiImageSizeSelectActual, mdiLinkBoxVariant, mdiPencilBox } from '@mdi/js';
+import MediaFile from './MediaFile';
+import PricingPlans from '../others/pricing';
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        onClose();
-      }
-    };
+// Update the type definition
+type TransitionProps = Omit<SlideProps, 'direction'>;
 
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div
-      ref={dropdownRef}
-      className="absolute bottom-0 mb-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-50"
-    >
-      <div className="flex gap-4">
-        <div
-          onClick={handleClick}
-          className="flex-1 flex flex-col items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-        >
-          <div className="text-2xl mb-2">📷</div>
-          <span className="text-sm">Upload Image</span>
-          <input
-            type="file"
-            className="hidden"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-          />
-        </div>
-
-        <div
-          className="flex-1 flex flex-col items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-        >
-          <div className="text-2xl mb-2">✏️</div>
-          <span className="text-sm">Whiteboard</span>
-        </div>
-
-        <div
-          className="flex-1 flex flex-col items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-        >
-          <div className="text-2xl mb-2">🔗</div>
-          <span className="text-sm">Crawler</span>
-        </div>
-      </div>
-    </div>
-  );
-};
+const Transition = React.forwardRef(function Transition(
+  props: TransitionProps & {
+    children: React.ReactElement<unknown>;
+  },
+  ref: React.Ref<unknown>,
+) {
+  return <Slide direction="up" ref={ref} {...props} />;
+});
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
   (
@@ -214,12 +117,22 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       handleInputChange,
       enhancePrompt,
       handleStop,
+      setSignInOpen,
+      setIsStreaming,
     },
     ref,
   ) => {
     const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
+    const { getStoredToken } = useUser();
+    const [state, actions] = useVariablesState();
     const fileInputRef = useRef<HTMLInputElement | null>(null);
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [files, setFiles] = useState<string | null>(null);
+    const [drawImage, setDrawImage] = React.useState<string | null>(null);
+    const [pricingOpen, setPricingOpen] = React.useState(false);
+    const [crawlerOpen, setCrawlerOpen] = React.useState(false);
+    const [isCrawlerLoading, setIsCrawlerLoading] = useState<boolean>(false);
+    const [openWhiteBoard, setOpenWhiteBoard] = React.useState(false);
+    const [crawlerImage, setCrawlerImage] = React.useState<string | null>(null);
     const buttonRef = useRef(null);
     const [micon, setMikeon] = useState(false);
     const [stopListening, setstoplistening] = useState(false);
@@ -231,6 +144,31 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [startmicListening, setStartmicListening] = useState(false);
     const [speechRecognition, setSpeechRecognition] = useState(null);
     const mikeof = false;
+    const token = getStoredToken();
+    const [anchorE2, setAnchorE2] = React.useState<null | HTMLElement>(null);
+    const open = Boolean(anchorE2);
+
+    useEffect(() => {
+      if (setIsStreaming) {
+        setIsStreaming(isStreaming);
+      }
+      else {
+        console.warn('prop is not provided');
+      }
+
+    }, [isStreaming])
+
+    const handleSelectClick = (event: React.MouseEvent<HTMLElement>) => {
+      if(token){
+        setAnchorE2(event.currentTarget);
+      }
+      else{
+        setSignInOpen(true)
+      }
+    };
+    const handleClose = () => {
+      setAnchorE2(null);
+    };
 
     const handleClick = () => {
       if (fileInputRef.current) {
@@ -247,16 +185,51 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
           reader.onloadend = () => {
             const base64String = reader.result as string;
-            // setFiles(base64String); // Implement your file handling logic
-            setIsDropdownOpen(false);
+            setFiles(base64String);
+            setAnchorE2(null);
           };
 
-          reader.readAsDataURL(selectedFile);
+          reader.readAsDataURL(selectedFile); // Convert image to Base64
         } else {
-          // setFiles(null) // Implement your file handling logic
-          setIsDropdownOpen(false);
+          setFiles(null)
+          setAnchorE2(null);
         }
       }
+    };
+
+    const handleClickOpenWhiteBoard = () => {
+      setOpenWhiteBoard(true);
+    };
+
+    const handleWhiteBoardClose = () => {
+      setOpenWhiteBoard(false);
+      setAnchorE2(null);
+    };
+    const handlePricingClose = () => {
+      setPricingOpen(false);
+      setAnchorE2(null);
+    };
+
+    const handleCrawlerOpen = () => {
+      setCrawlerOpen(true);
+    };
+
+    const handleCrawlerClose = () => {
+      setCrawlerOpen(false);
+      setAnchorE2(null);
+    };
+
+    const handleRemoveFile = () => {
+      setFiles(null); // Clear the image
+    };
+
+
+    const handleRemoveDrawFile = () => {
+      setDrawImage(null);
+    };
+
+    const handleRemoveCrawlerFile = () => {
+      setCrawlerImage(null);
     };
 
     useEffect(() => {
@@ -355,6 +328,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         console.log('transcript reset done')
       }
     }, [mikeof]);
+    
     useEffect(() => {
       if (micon && startmicListening) {
         startlist();
@@ -371,20 +345,25 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     }, [stopListening])
 
     const handleMicClick = () => {
-      if (!speechRecognition) {
-        startListeningwk();
-        setIsListening(!isListening);
+      if(token){
+        if (!speechRecognition) {
+          startListeningwk();
+          setIsListening(!isListening);
+        }
+  
+        if (isListening) {
+          stopListeningwk();
+        } else {
+          startListeningwk()
+          setIsListening(!isListening);
+        }
       }
-
-      if (isListening) {
-        stopListeningwk();
-      } else {
-        startListeningwk()
-        setIsListening(!isListening);
+      else{
+        setSignInOpen(true)
       }
     };
 
-    const handleChatClick =()=>{
+    const handleChatClick = () => {
       console.log("Clicked")
       chatStarted = false;
       console.log("Clicked", chatStarted)
@@ -400,71 +379,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         data-chat-visible={showChat}
       >
         <Box position={'absolute'} height={'100vh'} display={'flex'} alignItems={'center'}>
-          <Box onClick={handleChatClick} width={20} height={20} display={'flex'} justifyContent={'center'} alignItems={'center'} borderRadius={25} sx={{cursor:'pointer'}}>
+          <Box onClick={handleChatClick} width={20} height={20} display={token ? 'flex' : 'none'} justifyContent={'center'} alignItems={'center'} borderRadius={25} sx={{ cursor: 'pointer' }}>
             <i className="bi bi-chevron-right text-bolt-elements-textPrimary"></i>
           </Box>
         </Box>
-        <ClientOnly>{() => <MenuComponent chatStarted={chatStarted} />}</ClientOnly>
+        <ClientOnly>{() => <MenuComponent isStreaming={isStreaming} setPricingOpen={setPricingOpen}/>}</ClientOnly>
         <div ref={scrollRef} className="flex overflow-y-auto w-full h-full">
           <div className={classNames(styles.Chat, 'flex flex-col flex-grow min-w-[var(--chat-min-width)] h-full')}>
             {!chatStarted && (
-              <>
-                <div id="intro" className="mt-[3vh] mb-[2vh] w-full flex justify-center">
-                  <div className='max-w-chat' style={{ minWidth: 900 }}>
-                    <Box width={'100%'} display={'flex'} mb={2}>
-                      <Box
-                        component={'img'}
-                        src={Logo}
-                        height={60}
-                        width={'auto'}
-                      />
-                    </Box>
-                    <h1 className="text-3xl text-bolt-elements-textPrimary mb-2">
-                      Welcome To <span className={'font-bold'}>Websparks AI</span>
-                    </h1>
-                    <p className="text-2xl mb-4 text-bolt-elements-textSecondary">
-                      What you want to Build?
-                    </p>
-                  </div>
-                </div>
-                <div className="justify-center w-full flex mb-[1vh]">
-                  <div className='flex flex-wrap gap-1 items-center' style={{ minWidth: 900 }}>
-                    <Box
-                      component={'img'}
-                      src={SuggestIcon}
-                      height={20}
-                      width={'auto'}
-                    />
-                    <Typography fontFamily={'Montserrat'} className={'text-bolt-elements-textSecondary'}>Suggested</Typography>
-                  </div>
-                </div>
-                <div className="justify-center w-full flex">
-                  <div className='flex flex-wrap gap-4 justify-center' style={{ minWidth: 900 }}>
-                    <ProcessingCard title="From Figma/Image" subtitle="From Figma/Image">
-                      <svg className="w-24 h-24 text-white/80" viewBox="0 0 100 100" stroke="currentColor" fill="none">
-                        <path d="M30,30 Q50,10 70,30 Q90,50 70,70 Q50,90 30,70 Q10,50 30,30" strokeWidth="2" />
-                        <path d="M40,40 Q50,30 60,40 Q70,50 60,60 Q50,70 40,60 Q30,50 40,40" strokeWidth="2" />
-                      </svg>
-                    </ProcessingCard>
-
-                    <ProcessingCard title="From Sketch" subtitle="From Sketch">
-                      <svg className="w-24 h-24 text-white/80" viewBox="0 0 100 100" stroke="currentColor" fill="none">
-                        <path d="M30,50 L70,50" strokeWidth="2" />
-                        <path d="M65,45 L70,50 L65,55" strokeWidth="2" />
-                      </svg>
-                    </ProcessingCard>
-
-                    <ProcessingCard title="From Crawler" subtitle="From Crawler">
-                      <svg className="w-24 h-24 text-white/80" viewBox="0 0 100 100" stroke="currentColor" fill="none">
-                        <circle cx="50" cy="50" r="30" strokeWidth="2" />
-                        <path d="M20,50 L80,50" strokeWidth="2" />
-                        <path d="M50,20 L50,80" strokeWidth="2" />
-                        <circle cx="50" cy="50" r="40" strokeWidth="2" />
-                      </svg>
-                    </ProcessingCard>
-                  </div>
-                </div>
-              </>
+              <MediaFile setSignInOpen={setSignInOpen} setFiles={setFiles} handleClickOpenWhiteBoard={handleClickOpenWhiteBoard} handleCrawlerOpen={handleCrawlerOpen} />
             )}
             <div
               className={classNames('pt-6 px-6', {
@@ -522,75 +445,77 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     'shadow-sm border border-bolt-elements-borderColor bg-bolt-elements-prompt-background backdrop-filter backdrop-blur-[8px] rounded-lg overflow-hidden',
                   )}
                 >
-                  {/* <Box
-                    width={'100%'}
-                    p={2}
-                    className={'border-b border-bolt-elements-borderColor'}
-                  >
-                    <Grid container spacing={2}>
-                      <Grid item xs={6} sm={3}>
-                        <Box
-                          position="relative"
-                          width="auto"
-                          className={'border border-bolt-elements-borderColor'}
-                          borderRadius={2}
-                          display="flex"
-                          alignItems="center"
-                        >
-                          <Box
-                            component="img"
-                            src={""}
-                            width={40}
-                            height={40}
-                            borderRadius={2}
-                            m={0.5}
-                            sx={{ objectFit: 'cover' }}
-                          />
+                  {files || drawImage || crawlerImage ? (
 
-                          <Box>
-                            <Typography
-                              fontSize={14}
-                              sx={{
-                                display: '-webkit-box',
-                                overflow: 'hidden',
-                                WebkitBoxOrient: 'vertical',
-                                WebkitLineClamp: 1,
-                              }}
-                              className={'text-bolt-elements-textPrimary'}
-                            >
-                              Crawler Image'
-                            </Typography>
-                            <Typography fontSize={14} className={'text-bolt-elements-textPrimary'}>
-                               {((files?.length || 0) / 1024).toFixed(2)} KB 
-                              34 KB
-                            </Typography>
-                          </Box>
+                    <Box
+                      width={'100%'}
+                      p={2}
+                      className={'border-b border-bolt-elements-borderColor'}
+                    >
+                      <Grid container spacing={2}>
+                        <Grid item xs={6} sm={3}>
                           <Box
-                            position="absolute"
-                            width={20}
-                            height={20}
-                            top={-10}
-                            right={-10}
-                            display="flex"
-                            justifyContent="center"
-                            alignItems="center"
-                            p={0.3}
+                            position="relative"
+                            width="auto"
                             className={'border border-bolt-elements-borderColor'}
-                            borderRadius={25}
-                            sx={{
-                              background: '#FFF',
-                              cursor: 'pointer',
-                            }}
-                            onClick={() => {
-                              // files ? handleRemoveFile() : drawImage ? handleRemoveDrawFile() : handleRemoveCrawlerFile();
-                            }}
+                            borderRadius={2}
+                            display="flex"
+                            alignItems="center"
                           >
-                            <i className="bi bi-x"></i>
+                            <Box
+                              component="img"
+                              src={files || drawImage || crawlerImage || ""}
+                              width={40}
+                              height={40}
+                              borderRadius={2}
+                              m={0.5}
+                              sx={{ objectFit: 'cover' }}
+                            />
+
+                            <Box>
+                              <Typography
+                                fontSize={14}
+                                sx={{
+                                  display: '-webkit-box',
+                                  overflow: 'hidden',
+                                  WebkitBoxOrient: 'vertical',
+                                  WebkitLineClamp: 1,
+                                }}
+                                className={'text-bolt-elements-textPrimary'}
+                              >
+                                {files ? 'Uploaded Image' : drawImage ? 'Draw Image' : 'Crawler Image'}
+                              </Typography>
+                              <Typography fontSize={14} className={'text-bolt-elements-textPrimary'}>
+                                {((files?.length || 0) / 1024).toFixed(2)} KB
+                              </Typography>
+                            </Box>
+                            <Box
+                              position="absolute"
+                              width={20}
+                              height={20}
+                              top={-10}
+                              right={-10}
+                              display="flex"
+                              justifyContent="center"
+                              alignItems="center"
+                              p={0.3}
+                              className={'border border-bolt-elements-borderColor'}
+                              borderRadius={25}
+                              sx={{
+                                background: '#FFF',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => {
+                                files ? handleRemoveFile() : drawImage ? handleRemoveDrawFile() : handleRemoveCrawlerFile();
+                              }}
+                            >
+                              <i className="bi bi-x"></i>
+                            </Box>
                           </Box>
-                        </Box>
+                        </Grid>
                       </Grid>
-                    </Grid>
-                  </Box> */}
+                    </Box>
+                  ) : (null)}
                   <div style={{ position: 'relative' }}>
                     <textarea
                       ref={textareaRef}
@@ -688,10 +613,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         >
                           <button
                             ref={buttonRef}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIsDropdownOpen(!isDropdownOpen);
-                            }}
+                            onClick={handleSelectClick }
                             className="flex items-center border border-bolt-elements-borderColor text-bolt-elements-item-contentDefault bg-transparent enabled:hover:text-bolt-elements-item-contentActive rounded-md enabled:hover:bg-bolt-elements-item-backgroundActive disabled:cursor-not-allowed p-1"
                           >
                             <div className="i-ph:link-simple text-xl"></div>
@@ -721,14 +643,45 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 </div>
                 <div className="bg-bolt-elements-background-depth-1 pb-6">{/* Ghost Element */}</div>
               </div>
+              <Menu
+                anchorEl={anchorE2}
+                open={open}
+                onClose={handleClose}
+                anchorOrigin={{ horizontal: 'center', vertical: 'bottom' }}
+                transformOrigin={{ horizontal: 'center', vertical: 'top' }}
+              >
+                <Box px={2} py={1} display={'flex'} alignItems={'center'} gap={1}>
+                  <Box onClick={handleClick} border={`1px solid #d3d3d3`} borderRadius={2} p={2} sx={{ cursor: 'pointer' }}>
+                    <Box display={'flex'} justifyContent={'center'}>
+                      <Icon path={mdiImageSizeSelectActual} size={2} />
+                    </Box>
+                    <Typography>from-image</Typography>
+                    <input
+                      type="file"
+                      style={{ display: 'none' }}
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                    />
+                  </Box>
+                  <Box
+                    onClick={handleClickOpenWhiteBoard}
+                    border={`1px solid #d3d3d3`} borderRadius={2} p={2} sx={{ cursor: 'pointer' }}>
+                    <Box display={'flex'} justifyContent={'center'}>
+                      <Icon path={mdiPencilBox} size={2} />
+                    </Box>
+                    <Typography>from-whiteboard</Typography>
+                  </Box>
+                  <Box
+                    onClick={handleCrawlerOpen}
+                    border={`1px solid #d3d3d3`} borderRadius={2} p={2} sx={{ cursor: 'pointer' }}>
+                    <Box display={'flex'} justifyContent={'center'}>
+                      <Icon path={mdiLinkBoxVariant} size={2} />
+                    </Box>
+                    <Typography>from-crawler</Typography>
+                  </Box>
+                </Box>
+              </Menu>
             </div>
-            <DropdownMenu
-              isOpen={isDropdownOpen}
-              onClose={() => setIsDropdownOpen(false)}
-              handleClick={handleClick}
-              fileInputRef={fileInputRef}
-              handleFileChange={handleFileChange}
-            />
           </div>
           <ClientOnly>{() => <Workbench chatStarted={chatStarted} isStreaming={isStreaming} />}</ClientOnly>
           <Box position={'absolute'} bottom={0} width={'100%'} zIndex={9999} display={'flex'} justifyContent={'center'}>
@@ -751,7 +704,56 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             </Box>
           </Box>
         </div>
-
+        <Dialog
+          fullScreen
+          open={openWhiteBoard}
+          onClose={handleWhiteBoardClose}
+          TransitionComponent={Transition}
+        >
+          <WhiteBoard setDrawImage={setDrawImage} handleWhiteBoardClose={handleWhiteBoardClose} />
+        </Dialog>
+        <Dialog
+          open={crawlerOpen}
+          onClose={isCrawlerLoading ? undefined : handleCrawlerClose}
+          maxWidth={'lg'}
+          sx={{
+            '& .MuiDialog-paper': {
+              borderRadius: '25px',
+              width: 600,
+              border: `1px solid #d3d3d3`,
+              background: '#FFF'
+            },
+          }}
+          BackdropProps={{
+            sx: {
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              backdropFilter: 'blur(8px)',
+            },
+          }}
+        >
+          <Crawler setCrawlerImage={setCrawlerImage} isCrawlerLoading={isCrawlerLoading} setIsCrawlerLoading={setIsCrawlerLoading} />
+        </Dialog>
+        <Dialog 
+          open={pricingOpen}
+          onClose={handlePricingClose}
+          maxWidth={'xl'}
+          sx={{
+            '& .MuiDialog-paper': {
+              borderRadius: '25px',
+              // width: 600,
+              border: `1px solid #d3d3d3`,
+              background: '#FFF'
+            },
+          }}
+          BackdropProps={{
+            sx: {
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              backdropFilter: 'blur(8px)',
+            },
+          }}
+        >
+          <PricingPlans />
+        </Dialog>
       </div>
     );
   },

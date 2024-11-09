@@ -1,16 +1,18 @@
-import { Box, Chip, Dialog, Divider, Grid, Link, TextField, Typography, useTheme } from '@mui/material';
+import { Box, Chip, Dialog, Divider, Grid, Link, TextField, Typography } from '@mui/material';
 import React, { useEffect, useRef, useState } from 'react';
-import Logo from '../../../icons/roundedlogo.svg'
+import Logo from '../../../icons/roundedlogo.svg';
+import useAuth from './useAuth';
 
 interface LoginProps {
     verificationOpen: boolean;
     handleVerificationOpen: (email: string) => void;
     handleSignInOpen: () => void;
+    handleVerficationClose: () => void;
     email: string | null;
 }
 
-const VerificationCode: React.FC<LoginProps> = ({ verificationOpen, email, handleSignInOpen }) => {
-
+const VerificationCode: React.FC<LoginProps> = ({ verificationOpen, email, handleSignInOpen, handleVerficationClose }) => {
+    const { verifyEmail, resendVerificationCode } = useAuth();
     const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
     const [errors, setErrors] = useState<boolean[]>(new Array(6).fill(false));
     const [error, setError] = useState<string>('');
@@ -26,7 +28,7 @@ const VerificationCode: React.FC<LoginProps> = ({ verificationOpen, email, handl
 
     const handleVerificationChange = (index: number, value: string) => {
         const newVerificationCode = [...verificationCode];
-        newVerificationCode[index] = value.toUpperCase(); // Convert to uppercase to maintain consistency
+        newVerificationCode[index] = value.toUpperCase();
         setVerificationCode(newVerificationCode);
 
         if (value) {
@@ -48,7 +50,7 @@ const VerificationCode: React.FC<LoginProps> = ({ verificationOpen, email, handl
 
     const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
         e.preventDefault();
-        const pastedData = e.clipboardData.getData('text').toUpperCase(); // Convert pasted data to uppercase
+        const pastedData = e.clipboardData.getData('text').toUpperCase();
         const pastedChars = pastedData.split('').slice(0, 6);
 
         const newVerificationCode = [...verificationCode];
@@ -73,6 +75,12 @@ const VerificationCode: React.FC<LoginProps> = ({ verificationOpen, email, handl
         e.preventDefault();
         setError('');
         setSuccess('');
+        
+        if (!email) {
+            setError('Email is required');
+            return;
+        }
+
         const enteredCode = verificationCode.join('');
 
         if (enteredCode.length < 6) {
@@ -80,66 +88,42 @@ const VerificationCode: React.FC<LoginProps> = ({ verificationOpen, email, handl
             return;
         }
 
-        // try {
-        //     setLoading(true);
-        //     const payload = { email: email, ev_code: enteredCode };
+        try {
+            setLoading(true);
+            const result = await verifyEmail(email, enteredCode);
 
-        //     const response = await fetch(`${API_BASE_URL}/verify-email`, {
-        //         method: 'POST',
-        //         headers: {
-        //             'Accept': 'application/json',
-        //             'Content-Type': 'application/json',
-        //         },
-        //         body: JSON.stringify(payload),
-        //     });
-
-        //     if (!response.ok) {
-        //         const errorMessage = await response.json();
-        //         setError(errorMessage.detail);
-        //         throw new Error('Network response was not ok');
-        //     }
-
-        //     const data = await response.json();
-        //     if(data){
-        //         localStorage.setItem('token', data.access_token);
-        //         localStorage.setItem('default_project', data.default_project_id);
-        //         window.location.reload();
-        //     }
-        //     console.log(data);
-        // } catch (error) {
-        //     console.error(error);
-        // } finally {
-        //     setLoading(false); 
-        // }
+            if (result.success) {
+                window.location.reload()
+                handleVerficationClose();
+            } else {
+                setError(result.message);
+            }
+        } catch (err) {
+            setError('An unexpected error occurred. Please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleResendCode = async () => {
+        if (!email) {
+            setError('Email is required');
+            return;
+        }
+
         setError('');
         setSuccess('');
-        const data = {
-            gmail: email
-        };
-        // try {
-        //     const response = await fetch(`${API_BASE_URL}/send-verification-email`, {
-        //         method: 'POST',
-        //         headers: {
-        //             'Accept': 'application/json',
-        //             'Content-Type': 'application/json',
-        //         },
-        //         body: JSON.stringify(data),
-        //     });
-    
-        //     if (!response.ok) {
-        //         const errorMessage = await response.json();
-        //         setError(errorMessage.detail);
-        //         throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage.detail}`);
-        //     }
-        //     const responseData = await response.json();
-        //     setSuccess(responseData.message);
-        //     console.log(responseData);
-        // } catch (error) {
-        //     console.error('Error during sign in:', error);
-        // }
+        
+        try {
+            const result = await resendVerificationCode(email);
+            if (result.success) {
+                setSuccess(result.message);
+            } else {
+                setError(result.message);
+            }
+        } catch (err) {
+            setError('Failed to resend verification code. Please try again.');
+        }
     };
 
     return (
@@ -177,13 +161,14 @@ const VerificationCode: React.FC<LoginProps> = ({ verificationOpen, email, handl
                     <Typography fontFamily={'Montserrat'} textAlign={'center'} id="dialog-description">
                         Enter The 6 Digit Code Sent to your Email <br /> {email}.
                     </Typography>
-
                 </Box>
+                
                 <Box my={2}>
                     <Divider>
                         <Chip label="Or" size="small" sx={{fontFamily:'Montserrat'}}/>
                     </Divider>
                 </Box>
+                
                 <form onSubmit={handleSubmit}>
                     <Box>
                         <Grid container spacing={1} justifyContent="center">
@@ -208,6 +193,7 @@ const VerificationCode: React.FC<LoginProps> = ({ verificationOpen, email, handl
                                                 textAlign: 'center',
                                                 background: 'transparent',
                                                 fontWeight: 700,
+                                                fontFamily: 'Montserrat'
                                             },
                                             borderRadius: 1,
                                             border: `1px solid #d0d0d0`,
@@ -216,6 +202,7 @@ const VerificationCode: React.FC<LoginProps> = ({ verificationOpen, email, handl
                                 </Grid>
                             ))}
                         </Grid>
+
                         <Box mt={2}>
                             {error && (
                                 <Typography fontFamily={'Montserrat'} fontWeight={700} sx={{color:"red"}} textAlign="center">
@@ -227,8 +214,8 @@ const VerificationCode: React.FC<LoginProps> = ({ verificationOpen, email, handl
                                     {success}
                                 </Typography>
                             )}
-
                         </Box>
+
                         <Box mt={2}>
                             <Box
                                 onClick={handleSubmit}
@@ -238,23 +225,44 @@ const VerificationCode: React.FC<LoginProps> = ({ verificationOpen, email, handl
                                 p={1}
                                 border={`1px solid #d0d0d0`}
                                 borderRadius={3}
-                                sx={{ background:'#000', cursor: 'pointer' }}
+                                sx={{ 
+                                    background:'#000', 
+                                    cursor: isButtonDisabled ? 'not-allowed' : 'pointer',
+                                    opacity: isButtonDisabled ? 0.7 : 1,
+                                }}
                             >
                                 <Typography fontFamily={'Montserrat'} component={'span'} mr={1} color={'#FFF'}>
                                     {loading ? 'Verifying...' : `Verify Code`}
                                 </Typography>
-                                <i className="bi bi-arrow-right"></i>
+                                {!loading && <i className="bi bi-arrow-right" style={{ color: '#FFF' }}></i>}
                             </Box>
+
                             <Box display={'flex'} justifyContent={'center'} alignItems={'center'} my={3}>
-                                <Link onClick={handleResendCode} underline="hover" color="inherit" sx={{cursor:'pointer'}}>
-                                    <Typography fontFamily={'Montserrat'} fontWeight={700}>Resend Verify Code</Typography>
+                                <Link 
+                                    onClick={handleResendCode} 
+                                    underline="hover" 
+                                    color="inherit" 
+                                    sx={{
+                                        cursor:'pointer',
+                                        '&:hover': {
+                                            opacity: 0.8
+                                        }
+                                    }}
+                                >
+                                    <Typography fontFamily={'Montserrat'} fontWeight={700}>
+                                        Resend Verify Code
+                                    </Typography>
                                 </Link>
                             </Box>
+
                             <Box my={2}>
                                 <Divider />
                             </Box>
+
                             <Box display={'flex'} justifyContent={'center'} alignItems={'center'}>
-                                <span> Secure by <span style={{fontWeight:700}}>Websparks</span> </span>
+                                <Typography fontFamily={'Montserrat'}>
+                                    Secure by <span style={{fontWeight:700}}>Websparks</span>
+                                </Typography>
                             </Box>
                         </Box>
                     </Box>

@@ -13,10 +13,45 @@ export const loader = () => json({});
 
 export default function Index() {
   const [chatStarted, setChatStarted] = useState(false);
+  const [forgotVerificationEmail, setForgotVerificationEmail] = useState<string | null>(null);
+  const [forgotPassCode, setForgotPassCode] = useState<string | null>(null);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [signinOpen, setSignInOpen] = useState(false);
+  const [signUpOpen, setSignUpOpen] = useState(false);
+  const [verficationOpen, setVerificationOpen] = useState(false);
+  const [enterEmailOpen, setEnterEmailOpen] = useState(false);
+  const [forgotVerificationOpen, setForgotVerificationOpen] = useState(false);
+  const [passwordSetOpen, setPasswordSetOpen] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+
   return (
     <div className="flex flex-col h-full w-full">
-      <Header chatStarted={chatStarted} onChatStatusChange={() => setChatStarted(prev => !prev)} />
-      <ClientOnly fallback={<BaseChat chatStarted = {chatStarted} onChatStatusChange={() => setChatStarted(prev => !prev)} />}>{() => <Chat />}</ClientOnly>
+      <Header 
+        forgotVerificationEmail={forgotVerificationEmail}
+        setForgotVerificationEmail={setForgotVerificationEmail}
+        forgotPassCode={forgotPassCode}
+        setForgotPassCode={setForgotPassCode}
+        verificationEmail={verificationEmail}
+        setVerificationEmail={setVerificationEmail}
+        signinOpen={signinOpen}
+        setSignInOpen={setSignInOpen}
+        signUpOpen={signUpOpen}
+        setSignUpOpen={setSignUpOpen}
+        verficationOpen={verficationOpen}
+        setVerificationOpen={setVerificationOpen}
+        enterEmailOpen={enterEmailOpen}
+        setEnterEmailOpen={setEnterEmailOpen}
+        forgotVerificationOpen={forgotVerificationOpen}
+        setForgotVerificationOpen={setForgotVerificationOpen}
+        passwordSetOpen = {passwordSetOpen}
+        setPasswordSetOpen={setPasswordSetOpen}
+        isStreaming = {isStreaming}
+      />
+      <ClientOnly fallback={
+        <BaseChat setIsStreaming={setIsStreaming} setSignInOpen={setSignInOpen} chatStarted = {chatStarted} onChatStatusChange={() => setChatStarted(prev => !prev)} />}>{() => 
+        <Chat setSignInOpen={setSignInOpen} />
+        }
+      </ClientOnly>
     </div>
   );
 }
