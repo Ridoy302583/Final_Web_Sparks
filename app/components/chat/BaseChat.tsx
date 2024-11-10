@@ -28,6 +28,12 @@ const TEXTAREA_MIN_HEIGHT = 76;
 
 interface BaseChatProps {
   textareaRef?: React.RefObject<HTMLTextAreaElement> | undefined;
+
+  fileInputRef?: React.RefObject<HTMLInputElement> | undefined;
+  fileInputs?: FileList | null;
+  removeFile?: (index: number) => void;
+  handleFileInputChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+
   messageRef?: RefCallback<HTMLDivElement> | undefined;
   scrollRef?: RefCallback<HTMLDivElement> | undefined;
   showChat?: boolean;
@@ -101,6 +107,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       textareaRef,
       messageRef,
       scrollRef,
+
+      fileInputRef,
+      fileInputs,
+      removeFile,
+      handleFileInputChange,
+
       showChat = true,
       chatStarted = false,
       onChatStatusChange,
@@ -123,8 +135,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
     const { getStoredToken } = useUser();
     const [state, actions] = useVariablesState();
-    const fileInputRef = useRef<HTMLInputElement | null>(null);
-    const [files, setFiles] = useState<string | null>(null);
     const [drawImage, setDrawImage] = React.useState<string | null>(null);
     const [pricingOpen, setPricingOpen] = React.useState(false);
     const [crawlerOpen, setCrawlerOpen] = React.useState(false);
@@ -168,33 +178,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       setAnchorE2(null);
     };
 
-    const handleClick = () => {
-      if (fileInputRef.current) {
-        fileInputRef.current.click();
-      }
-    };
-
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const selectedFiles = event.target.files;
-      if (selectedFiles && selectedFiles.length > 0) {
-        const selectedFile = selectedFiles[0];
-        if (selectedFile.type.startsWith("image/")) {
-          const reader = new FileReader();
-
-          reader.onloadend = () => {
-            const base64String = reader.result as string;
-            setFiles(base64String);
-            setAnchorE2(null);
-          };
-
-          reader.readAsDataURL(selectedFile); // Convert image to Base64
-        } else {
-          setFiles(null)
-          setAnchorE2(null);
-        }
-      }
-    };
-
     const handleClickOpenWhiteBoard = () => {
       setOpenWhiteBoard(true);
     };
@@ -216,11 +199,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       setCrawlerOpen(false);
       setAnchorE2(null);
     };
-
-    const handleRemoveFile = () => {
-      setFiles(null); // Clear the image
-    };
-
 
     const handleRemoveDrawFile = () => {
       setDrawImage(null);
@@ -367,23 +345,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       console.log("Clicked", chatStarted)
     }
 
-    const handleSendMessage = (event: React.UIEvent, messageInput?: string) => {
-      // Include any active image in the message
-      const activeImage = files || drawImage || crawlerImage;
-      if (activeImage) {
-        // Combine the image and text into a single message
-        const combinedMessage = `[Image: ${activeImage}]\n\n${messageInput || input}`;
-        sendMessage?.(event, combinedMessage);
-      } else {
-        sendMessage?.(event, messageInput);
-      }
-      
-      // Clear the images after sending
-      setFiles(null);
-      setDrawImage(null);
-      setCrawlerImage(null);
-    };
-
     return (
       <div
         ref={ref}
@@ -402,7 +363,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         <div ref={scrollRef} className="flex overflow-y-auto w-full h-full">
           <div className={classNames(styles.Chat, 'flex flex-col flex-grow min-w-[var(--chat-min-width)] h-full')}>
             {!chatStarted && (
-              <MediaFile setSignInOpen={setSignInOpen} setFiles={setFiles} handleClickOpenWhiteBoard={handleClickOpenWhiteBoard} handleCrawlerOpen={handleCrawlerOpen} />
+              <MediaFile setSignInOpen={setSignInOpen}
+              //  setFiles={setFiles} 
+               handleClickOpenWhiteBoard={handleClickOpenWhiteBoard} handleCrawlerOpen={handleCrawlerOpen} />
             )}
             <div
               className={classNames('pt-6 px-6', {
@@ -460,77 +423,45 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     'shadow-sm border border-bolt-elements-borderColor bg-bolt-elements-prompt-background backdrop-filter backdrop-blur-[8px] rounded-lg overflow-hidden',
                   )}
                 >
-                  {files || drawImage || crawlerImage ? (
-
-                    <Box
-                      width={'100%'}
-                      p={2}
-                      className={'border-b border-bolt-elements-borderColor'}
-                    >
-                      <Grid container spacing={2}>
-                        <Grid item xs={6} sm={3}>
-                          <Box
-                            position="relative"
-                            width="auto"
-                            className={'border border-bolt-elements-borderColor'}
-                            borderRadius={2}
-                            display="flex"
-                            alignItems="center"
-                          >
-                            <Box
-                              component="img"
-                              src={files || drawImage || crawlerImage || ""}
-                              width={40}
-                              height={40}
-                              borderRadius={2}
-                              m={0.5}
-                              sx={{ objectFit: 'cover' }}
-                            />
-
-                            <Box>
-                              <Typography
-                                fontSize={14}
-                                sx={{
-                                  display: '-webkit-box',
-                                  overflow: 'hidden',
-                                  WebkitBoxOrient: 'vertical',
-                                  WebkitLineClamp: 1,
-                                }}
-                                className={'text-bolt-elements-textPrimary'}
+                  {fileInputs && (
+                    <div className="flex flex-col gap-5 bg-bolt-elements-background-depth-1 p-4">
+                      <div className="px-5 flex gap-5">
+                        {Array.from(fileInputs).map((file, index) => {
+                          return (
+                            <div className="relative" key={index}>
+                              <div
+                                className="relative flex rounded-lg border border-bolt-elements-borderColor overflow-hidden">
+                                
+                                    <button className="h-20 w-20 bg-transparent outline-none">
+                                      {file.type.includes('image') ? (
+                                        <img
+                                          className="object-cover w-full h-full"
+                                          src={URL.createObjectURL(file)}
+                                          alt={file.name}
+                                        />
+                                      ) : (
+                                        <div className="flex items-center justify-center w-full h-full text-bolt-elements-textTertiary">
+                                          <div className="i-ph:file" />
+                                        </div>
+                                      )}
+                                    </button>
+                                    <span className="text-xs text-bolt-elements-textTertiary">
+                                      {file.name}
+                                    </span>
+                              </div>
+                              <button
+                                className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 rounded-full w-[18px] h-[18px] flex items-center justify-center z-1 bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor text-bolt-elements-button-secondary-text"
+                                onClick={() => removeFile?.(index)}
                               >
-                                {files ? 'Uploaded Image' : drawImage ? 'Draw Image' : 'Crawler Image'}
-                              </Typography>
-                              <Typography fontSize={14} className={'text-bolt-elements-textPrimary'}>
-                                {((files?.length || 0) / 1024).toFixed(2)} KB
-                              </Typography>
-                            </Box>
-                            <Box
-                              position="absolute"
-                              width={20}
-                              height={20}
-                              top={-10}
-                              right={-10}
-                              display="flex"
-                              justifyContent="center"
-                              alignItems="center"
-                              p={0.3}
-                              className={'border border-bolt-elements-borderColor'}
-                              borderRadius={25}
-                              sx={{
-                                background: '#FFF',
-                                cursor: 'pointer',
-                              }}
-                              onClick={() => {
-                                files ? handleRemoveFile() : drawImage ? handleRemoveDrawFile() : handleRemoveCrawlerFile();
-                              }}
-                            >
-                              <i className="bi bi-x"></i>
-                            </Box>
-                          </Box>
-                        </Grid>
-                      </Grid>
-                    </Box>
-                  ) : (null)}
+                                <div className="i-ph:x scale-70"></div>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )
+                  }
                   <div style={{ position: 'relative' }}>
                     <textarea
                       ref={textareaRef}
@@ -539,9 +470,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         if (event.key === 'Enter') {
                           if (event.shiftKey) {
                             return;
-                          }
+                              }
+  
                           event.preventDefault();
-                          handleSendMessage(event);
+  
+                          sendMessage?.(event);
                         }
                       }}
                       value={input}
@@ -565,7 +498,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               handleStop?.();
                               return;
                             }
-                            handleSendMessage(event);
+  
+                            sendMessage?.(event);
                           }}
                         />
                       )}
@@ -663,17 +597,19 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 transformOrigin={{ horizontal: 'center', vertical: 'top' }}
               >
                 <Box px={2} py={1} display={'flex'} alignItems={'center'} gap={1}>
-                  <Box onClick={handleClick} border={`1px solid #d3d3d3`} borderRadius={2} p={2} sx={{ cursor: 'pointer' }}>
+                  <Box onClick={() => fileInputRef?.current?.click()} border={`1px solid #d3d3d3`} borderRadius={2} p={2} sx={{ cursor: 'pointer' }}>
                     <Box display={'flex'} justifyContent={'center'}>
                       <Icon path={mdiImageSizeSelectActual} size={2} />
                     </Box>
                     <Typography>from-image</Typography>
-                    <input
-                      type="file"
-                      style={{ display: 'none' }}
+                    <input type="file"
                       ref={fileInputRef}
-                      onChange={handleFileChange}
-                    />
+                      aria-hidden="true"
+                      accept=".jpg,.jpeg,.png,.gif,.webp,.svg,.pdf,.txt,.doc,.docx,.py,.ipynb,.js,.mjs,.cjs,.jsx,.html,.css,.scss,.sass,.ts,.tsx,.java,.cs,.php,.c,.cc,.cpp,.cxx,.h,.hh,.hpp,.rs,.swift,.go,.rb,.kt,.kts,.scala,.sh,.bash,.zsh,.bat,.csv,.log,.ini,.cfg,.config,.json,.yaml,.yml,.toml,.lua,.sql,.md,.tex,.latex,.asm,.ino,.s"
+                      multiple
+                      style={{display: 'none', visibility: 'hidden'}}
+                      onChange={handleFileInputChange}
+                      />
                   </Box>
                   <Box
                     onClick={handleClickOpenWhiteBoard}

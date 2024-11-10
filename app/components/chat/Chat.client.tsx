@@ -11,11 +11,14 @@ import { useChatHistory } from '~/lib/persistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { fileModificationsToHTML } from '~/utils/diff';
-import { DEFAULT_MODEL } from '~/utils/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, type Provider } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat } from './BaseChat';
 import useUser from '~/types/user';
+import { isValidFileType } from '~/utils/fileValidation';
+import { eventBus, type WebcontainerErrorEvent } from '~/lib/event';
+import { webcontainer } from '~/lib/webcontainer';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -77,13 +80,69 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInO
   useShortcuts();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
   const [model, setModel] = useState(DEFAULT_MODEL);
 
   const { showChat } = useStore(chatStore);
 
   const [animationScope, animate] = useAnimate();
+
+  const [fileInputs, setFileInputs] = useState<FileList | null>(null);
+
+  const addFiles = (files: FileList) => {
+    const isValid = Array.from(files).every(isValidFileType);
+    if (!isValid) {
+      toast.error("Unsupported file type. Only images, text, pdf, csv, json, xml, and code files are supported.");
+      return;
+    }
+
+    setFileInputs((prev) => {
+      if (prev === null) {
+        return files;
+      }
+
+      const merged = new DataTransfer();
+
+      for (let i = 0; i < prev.length; i++) {
+        merged.items.add(prev[i]);
+      }
+
+      for (let i = 0; i < files.length; i++) {
+        merged.items.add(files[i]);
+      }
+
+      return merged.files;
+    });
+  }
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { files } = event.target;
+    console.log(files);
+    if (files) {
+      addFiles(files);
+    }
+  }
+
+  const removeFile = (index: number) => {
+    setFileInputs((prev) => {
+      if (prev === null) {
+        return null;
+      }
+
+      const copy = new DataTransfer();
+
+      for (let i = 0; i < prev.length; i++) {
+        if (i !== index) {
+          copy.items.add(prev[i]);
+        }
+      }
+
+      if (copy.items.length === 0) {
+        return null;
+      }
+      return copy.files;
+    });
+  }
 
   const { messages, isLoading, input, handleInputChange, setInput, stop, append } = useChat({
     api: '/api/chat',
@@ -189,16 +248,54 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInO
         messageContent += `${diff}\n\n`;
         workbenchStore.resetAllFileModifications();
       }
-      
-      messageContent += _input;
+      else {
 
-      console.log("messageContent: ", messageContent)
+        const filePromises: Promise<{
+          name?: string;
+          contentType?: string;
+          url: string;
+        }>[] = Array.from(fileInputs || []).map((file) => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => {
+              let contentType = file.type || 'text/plain';
+              if (contentType === 'application/octet-stream') {
+                contentType = 'text/plain';
+              }
+              if (reader.result === null || typeof reader.result !== 'string') {
+                reject(new Error('Failed to read file'));
+                return;
+              }
+              resolve({
+                name: file.name,
+                contentType: contentType,
+                url: reader.result
+              });
+            };
+            reader.onerror = reject;
+          });
+        });
+  
+        const experimental_attachments: {
+          name?: string;
+          contentType?: string;
+          url: string;
+        }[] = await Promise.all(filePromises);
+        append({
+          role: 'user',
+          content: `[Model: ${model}]\n\n${_input}`,
+          experimental_attachments: experimental_attachments
+        });
+      }
 
-      append({ 
-        role: 'user', 
-        content: messageContent
-      });
+      // console.log("messageContent: ", messageContent)
 
+      // append({ 
+      //   role: 'user', 
+      //   content: messageContent
+      // });
+      setFileInputs(null);
       setInput('');
       resetEnhancer();
       textareaRef.current?.blur();
@@ -211,9 +308,84 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInO
 
   const [messageRef, scrollRef] = useSnapScroll();
 
+  useEffect(() => {
+    const sentErrors = new Set<string>();
+    let currentToastId: Id = -1;
+
+    const handleWebcontainerError = (event: WebcontainerErrorEvent) => {
+      const newErrors = event.messages.filter((msg: string) => !sentErrors.has(msg));
+      if (newErrors.length === 0) return;
+      newErrors.forEach((msg: string) => sentErrors.add(msg));
+
+      const joinedErrors = Array.from(sentErrors).join('\n');
+      const errorElement = <div className="flex flex-col gap-2">
+        <div>Ran into errors while executing the command:</div>
+        <div className="text-sm text-bolt-elements-textSecondary">
+          {newErrors[0].slice(0, 100)}
+          {newErrors[0].length > 100 && '...'}
+
+          {newErrors.length > 1 && ` (+${newErrors.length - 1} more)`}
+        </div>
+        <button
+          onClick={() => {
+            const errorMessage = `The following errors occurred while running the command:\n${joinedErrors}\n\nHow can we fix these errors?`;
+            sentErrors.clear();
+            toast.dismiss(currentToastId);
+            currentToastId = -1;
+            append({
+              role: 'user',
+              content: `[Model: ${provider}-${model}]\n\n${errorMessage}`
+            });
+          }}
+          className="px-3 py-1.5 bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text rounded-md text-sm font-medium"
+        >
+          Fix errors
+        </button>
+      </div>;
+
+      if (currentToastId !== -1) {
+        toast.update(currentToastId, {
+          render: errorElement
+        });
+        return;
+      } else {
+        currentToastId = toast.error(
+          errorElement,
+          {
+            autoClose: false,
+            closeOnClick: false
+          }
+        );
+      }
+    };
+
+    webcontainer.then(() => {
+      eventBus.on('webcontainer-error', handleWebcontainerError);
+    });
+
+    return () => {
+      webcontainer.then(() => {
+        eventBus.off('webcontainer-error', handleWebcontainerError);
+      });
+    };
+  }, [append]);
+
+  const [provider, setProvider] = useState(DEFAULT_PROVIDER);
+
+  const setProviderModel = (provider: string, model: string) => {
+    setProvider(provider as Provider);
+    setModel(model);
+  }
+
   return (
     <BaseChat
       ref={animationScope}
+
+      fileInputRef={fileInputRef}
+      fileInputs={fileInputs}
+      removeFile={removeFile}
+      handleFileInputChange={handleFileInputChange}
+
       textareaRef={textareaRef}
       input={input}
       showChat={showChat}
