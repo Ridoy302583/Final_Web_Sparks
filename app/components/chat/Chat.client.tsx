@@ -1,24 +1,21 @@
-//
-// Preventing TS checks with files presented in the video for a better presentation.
 import { useStore } from '@nanostores/react';
 import type { Message } from 'ai';
 import { useChat } from 'ai/react';
 import { useAnimate } from 'framer-motion';
-import { memo, useEffect, useRef, useState } from 'react';
-import { cssTransition, toast, ToastContainer } from 'react-toastify';
+import { type DragEvent, memo, useEffect, useRef, useState } from 'react';
+import { cssTransition, type Id, toast, ToastContainer } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
 import { useChatHistory } from '~/lib/persistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { fileModificationsToHTML } from '~/utils/diff';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, type Provider } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat } from './BaseChat';
-import useUser from '~/types/user';
-import { isValidFileType } from '~/utils/fileValidation';
-import { eventBus, type WebcontainerErrorEvent } from '~/lib/event';
 import { webcontainer } from '~/lib/webcontainer';
+import { eventBus, type WebcontainerErrorEvent } from '~/lib/events';
+import { isValidFileType } from '~/utils/fileValidation';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, type Provider } from '~/utils/modelConstants';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -27,18 +24,14 @@ const toastAnimation = cssTransition({
 
 const logger = createScopedLogger('Chat');
 
-interface Props{
-  setSignInOpen: (open: boolean) => void;
-}
-
-export const Chat:React.FC <Props> =({setSignInOpen})=> {
+export function Chat() {
   renderLogger.trace('Chat');
 
   const { ready, initialMessages, storeMessageHistory } = useChatHistory();
 
   return (
     <>
-      {ready && <ChatImpl setSignInOpen={setSignInOpen} initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
+      {ready && <ChatImpl initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
       <ToastContainer
         closeButton={({ closeToast }) => {
           return (
@@ -73,16 +66,16 @@ export const Chat:React.FC <Props> =({setSignInOpen})=> {
 interface ChatProps {
   initialMessages: Message[];
   storeMessageHistory: (messages: Message[]) => Promise<void>;
-  setSignInOpen: (open: boolean) => void;
 }
 
-export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInOpen }: ChatProps) => {
+export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProps) => {
   useShortcuts();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
-  const [model, setModel] = useState(DEFAULT_MODEL);
 
   const { showChat } = useStore(chatStore);
 
@@ -117,7 +110,7 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInO
   }
   const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { files } = event.target;
-    console.log(files);
+
     if (files) {
       addFiles(files);
     }
@@ -158,7 +151,6 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInO
 
   const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
   const { parsedMessages, parseMessages } = useMessageParser();
-  const { getStoredToken } = useUser();
 
   const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
 
@@ -218,95 +210,114 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInO
 
   const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
     const _input = messageInput || input;
-    const token = getStoredToken();
-    
+
     if (_input.length === 0 || isLoading) {
       return;
     }
 
-    if (!token) {
-      console.log('Error: Authentication token not found. Please login to send messages.');
-      toast.error('Please login to send messages');
-      return;
+    /**
+     * @note (delm) Usually saving files shouldn't take long but it may take longer if there
+     * many unsaved files. In that case we need to block user input and show an indicator
+     * of some kind so the user is aware that something is happening. But I consider the
+     * happy case to be no unsaved files and I would expect users to save their changes
+     * before they send another message.
+     */
+    await workbenchStore.saveAllFiles();
+
+    const fileModifications = workbenchStore.getFileModifcations();
+
+    chatStore.setKey('aborted', false);
+
+    runAnimation();
+
+    if (fileModifications !== undefined) {
+      const diff = fileModificationsToHTML(fileModifications);
+
+      /**
+       * If we have file modifications we append a new user message manually since we have to prefix
+       * the user input with the file modifications and we don't want the new user input to appear
+       * in the prompt. Using `append` is almost the same as `handleSubmit` except that we have to
+       * manually reset the input and we'd have to manually pass in file attachments. However, those
+       * aren't relevant here.
+       */
+      append({ role: 'user', content: `[Model: ${provider}-${model}]\n\n${diff}\n\n${_input}` });
+
+      /**
+       * After sending a new message we reset all modifications since the model
+       * should now be aware of all the changes.
+       */
+      workbenchStore.resetAllFileModifications();
+    } else {
+
+      const filePromises: Promise<{
+        name?: string;
+        contentType?: string;
+        url: string;
+      }>[] = Array.from(fileInputs || []).map((file) => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => {
+            let contentType = file.type || 'text/plain';
+            if (contentType === 'application/octet-stream') {
+              contentType = 'text/plain';
+            }
+            if (reader.result === null || typeof reader.result !== 'string') {
+              reject(new Error('Failed to read file'));
+              return;
+            }
+            resolve({
+              name: file.name,
+              contentType: contentType,
+              url: reader.result
+            });
+          };
+          reader.onerror = reject;
+        });
+      });
+
+      const experimental_attachments: {
+        name?: string;
+        contentType?: string;
+        url: string;
+      }[] = await Promise.all(filePromises);
+      append({
+        role: 'user',
+        content: `[Model: ${provider}-${model}]\n\n${_input}`,
+        experimental_attachments: experimental_attachments
+      });
     }
 
-    try {
-      await workbenchStore.saveAllFiles();
+    setFileInputs(null);
 
-      const fileModifications = workbenchStore.getFileModifcations();
+    setInput('');
 
-      chatStore.setKey('aborted', false);
+    resetEnhancer();
 
-      runAnimation();
-
-      // Check if the message contains an image
-      const hasImage = _input.includes('[Image:');
-      let messageContent = `[Model: ${model}]\n\n`;
-      
-      if (fileModifications !== undefined) {
-        const diff = fileModificationsToHTML(fileModifications);
-        messageContent += `${diff}\n\n`;
-        workbenchStore.resetAllFileModifications();
-      }
-      else {
-
-        const filePromises: Promise<{
-          name?: string;
-          contentType?: string;
-          url: string;
-        }>[] = Array.from(fileInputs || []).map((file) => {
-          return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => {
-              let contentType = file.type || 'text/plain';
-              if (contentType === 'application/octet-stream') {
-                contentType = 'text/plain';
-              }
-              if (reader.result === null || typeof reader.result !== 'string') {
-                reject(new Error('Failed to read file'));
-                return;
-              }
-              resolve({
-                name: file.name,
-                contentType: contentType,
-                url: reader.result
-              });
-            };
-            reader.onerror = reject;
-          });
-        });
-  
-        const experimental_attachments: {
-          name?: string;
-          contentType?: string;
-          url: string;
-        }[] = await Promise.all(filePromises);
-        append({
-          role: 'user',
-          content: `[Model: ${model}]\n\n${_input}`,
-          experimental_attachments: experimental_attachments
-        });
-      }
-
-      // console.log("messageContent: ", messageContent)
-
-      // append({ 
-      //   role: 'user', 
-      //   content: messageContent
-      // });
-      setFileInputs(null);
-      setInput('');
-      resetEnhancer();
-      textareaRef.current?.blur();
-      
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast.error('Failed to send message');
-    }
+    textareaRef.current?.blur();
   };
 
   const [messageRef, scrollRef] = useSnapScroll();
+
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+  };
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const droppedFiles = event.dataTransfer?.files || new DataTransfer().files;
+    const droppedFilesArray = Array.from(droppedFiles);
+    if (droppedFilesArray.length > 0) {
+      addFiles(droppedFiles);
+    }
+    setIsDragging(false);
+  };
 
   useEffect(() => {
     const sentErrors = new Set<string>();
@@ -371,6 +382,7 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInO
   }, [append]);
 
   const [provider, setProvider] = useState(DEFAULT_PROVIDER);
+  const [model, setModel] = useState(DEFAULT_MODEL);
 
   const setProviderModel = (provider: string, model: string) => {
     setProvider(provider as Provider);
@@ -386,6 +398,15 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInO
       removeFile={removeFile}
       handleFileInputChange={handleFileInputChange}
 
+      isDragging={isDragging}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+
+      model={model}
+      provider={provider}
+      setProviderModel={setProviderModel}
+
       textareaRef={textareaRef}
       input={input}
       showChat={showChat}
@@ -394,9 +415,6 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInO
       enhancingPrompt={enhancingPrompt}
       promptEnhanced={promptEnhanced}
       sendMessage={sendMessage}
-      setSignInOpen={setSignInOpen}
-      model={model}
-      setModel={setModel}
       messageRef={messageRef}
       scrollRef={scrollRef}
       handleInputChange={handleInputChange}
@@ -412,7 +430,7 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInO
         };
       })}
       enhancePrompt={() => {
-        enhancePrompt(input, (input) => {
+        enhancePrompt(input, model, provider, (input) => {
           setInput(input);
           scrollTextArea();
         });

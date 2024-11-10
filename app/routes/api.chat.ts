@@ -39,7 +39,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     };
 
     const result = await streamText(messages, context.cloudflare.env, options);
-
+    console.log('Result: ', result)
     stream.switchSource(result.toAIStream());
 
     return new Response(stream.readable, {

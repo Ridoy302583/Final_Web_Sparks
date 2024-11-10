@@ -12,7 +12,7 @@ interface ToolResult<Name extends string, Args, Result> {
 }
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   toolInvocations?: ToolResult<string, unknown, unknown>[];
   experimental_attachments?: {
@@ -70,6 +70,7 @@ export function processMessages(messages: Messages): {
 export function streamText(messages: Messages, env: Env, options?: StreamingOptions) {
   const { messages: processedMessages, currentModel, provider } = processMessages(messages);
   const model: any = getModel(provider, currentModel, env);
+
   return _streamText({
     model,
     system: getSystemPrompt(),
