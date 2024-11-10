@@ -157,7 +157,7 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, handleSignUpClose, handleSi
                 </Box>
 
                 <Box>
-                    <SocialLogin />
+                    <SocialLogin setSubmitError={setError} />
                 </Box>
 
                 <Box my={2}>

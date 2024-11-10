@@ -1,4 +1,4 @@
-// @ts-nocheck
+//
 // Preventing TS checks with files presented in the video for a better presentation.
 import { useStore } from '@nanostores/react';
 import type { Message } from 'ai';
@@ -15,6 +15,7 @@ import { DEFAULT_MODEL } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat } from './BaseChat';
+import useUser from '~/types/user';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -23,14 +24,18 @@ const toastAnimation = cssTransition({
 
 const logger = createScopedLogger('Chat');
 
-export function Chat() {
+interface Props{
+  setSignInOpen: (open: boolean) => void;
+}
+
+export const Chat:React.FC <Props> =({setSignInOpen})=> {
   renderLogger.trace('Chat');
 
   const { ready, initialMessages, storeMessageHistory } = useChatHistory();
 
   return (
     <>
-      {ready && <ChatImpl initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
+      {ready && <ChatImpl setSignInOpen={setSignInOpen} initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
       <ToastContainer
         closeButton={({ closeToast }) => {
           return (
@@ -65,9 +70,10 @@ export function Chat() {
 interface ChatProps {
   initialMessages: Message[];
   storeMessageHistory: (messages: Message[]) => Promise<void>;
+  setSignInOpen: (open: boolean) => void;
 }
 
-export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProps) => {
+export const ChatImpl = memo(({ initialMessages, storeMessageHistory, setSignInOpen }: ChatProps) => {
   useShortcuts();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -93,6 +99,7 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
 
   const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
   const { parsedMessages, parseMessages } = useMessageParser();
+  const { getStoredToken } = useUser();
 
   const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
 
@@ -152,52 +159,54 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
 
   const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
     const _input = messageInput || input;
-
+    const token = getStoredToken();
+    
     if (_input.length === 0 || isLoading) {
       return;
     }
 
-    /**
-     * @note (delm) Usually saving files shouldn't take long but it may take longer if there
-     * many unsaved files. In that case we need to block user input and show an indicator
-     * of some kind so the user is aware that something is happening. But I consider the
-     * happy case to be no unsaved files and I would expect users to save their changes
-     * before they send another message.
-     */
-    await workbenchStore.saveAllFiles();
-
-    const fileModifications = workbenchStore.getFileModifcations();
-
-    chatStore.setKey('aborted', false);
-
-    runAnimation();
-
-    if (fileModifications !== undefined) {
-      const diff = fileModificationsToHTML(fileModifications);
-
-      /**
-       * If we have file modifications we append a new user message manually since we have to prefix
-       * the user input with the file modifications and we don't want the new user input to appear
-       * in the prompt. Using `append` is almost the same as `handleSubmit` except that we have to
-       * manually reset the input and we'd have to manually pass in file attachments. However, those
-       * aren't relevant here.
-       */
-      append({ role: 'user', content: `[Model: ${model}]\n\n${diff}\n\n${_input}` });
-
-      /**
-       * After sending a new message we reset all modifications since the model
-       * should now be aware of all the changes.
-       */
-      workbenchStore.resetAllFileModifications();
-    } else {
-      append({ role: 'user', content: `[Model: ${model}]\n\n${_input}` });
+    if (!token) {
+      console.log('Error: Authentication token not found. Please login to send messages.');
+      toast.error('Please login to send messages');
+      return;
     }
 
-    setInput('');
+    try {
+      await workbenchStore.saveAllFiles();
 
-    resetEnhancer();
+      const fileModifications = workbenchStore.getFileModifcations();
 
-    textareaRef.current?.blur();
+      chatStore.setKey('aborted', false);
+
+      runAnimation();
+
+      // Check if the message contains an image
+      const hasImage = _input.includes('[Image:');
+      let messageContent = `[Model: ${model}]\n\n`;
+      
+      if (fileModifications !== undefined) {
+        const diff = fileModificationsToHTML(fileModifications);
+        messageContent += `${diff}\n\n`;
+        workbenchStore.resetAllFileModifications();
+      }
+      
+      messageContent += _input;
+
+      console.log("messageContent: ", messageContent)
+
+      append({ 
+        role: 'user', 
+        content: messageContent
+      });
+
+      setInput('');
+      resetEnhancer();
+      textareaRef.current?.blur();
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message');
+    }
   };
 
   const [messageRef, scrollRef] = useSnapScroll();
@@ -213,6 +222,7 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
       enhancingPrompt={enhancingPrompt}
       promptEnhanced={promptEnhanced}
       sendMessage={sendMessage}
+      setSignInOpen={setSignInOpen}
       model={model}
       setModel={setModel}
       messageRef={messageRef}

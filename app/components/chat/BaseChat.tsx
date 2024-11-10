@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Preventing TS checks with files presented in the video for a better presentation.
 import type { Message } from 'ai';
 import React, { type RefCallback, useRef, useEffect } from 'react';
@@ -47,7 +46,6 @@ interface BaseChatProps {
   sendMessage?: (event: React.UIEvent, messageInput?: string) => void;
   handleInputChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
   enhancePrompt?: () => void;
-  chatStarted: (chatStarted: any) => void;
 }
 
 const footerLinks = [
@@ -369,6 +367,23 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       console.log("Clicked", chatStarted)
     }
 
+    const handleSendMessage = (event: React.UIEvent, messageInput?: string) => {
+      // Include any active image in the message
+      const activeImage = files || drawImage || crawlerImage;
+      if (activeImage) {
+        // Combine the image and text into a single message
+        const combinedMessage = `[Image: ${activeImage}]\n\n${messageInput || input}`;
+        sendMessage?.(event, combinedMessage);
+      } else {
+        sendMessage?.(event, messageInput);
+      }
+      
+      // Clear the images after sending
+      setFiles(null);
+      setDrawImage(null);
+      setCrawlerImage(null);
+    };
+
     return (
       <div
         ref={ref}
@@ -525,10 +540,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           if (event.shiftKey) {
                             return;
                           }
-
                           event.preventDefault();
-
-                          sendMessage?.(event);
+                          handleSendMessage(event);
                         }
                       }}
                       value={input}
@@ -552,8 +565,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               handleStop?.();
                               return;
                             }
-
-                            sendMessage?.(event);
+                            handleSendMessage(event);
                           }}
                         />
                       )}
@@ -731,7 +743,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             },
           }}
         >
-          <Crawler setCrawlerImage={setCrawlerImage} isCrawlerLoading={isCrawlerLoading} setIsCrawlerLoading={setIsCrawlerLoading} />
+          <Crawler handleCrawlerClose={handleCrawlerClose} setCrawlerImage={setCrawlerImage} isCrawlerLoading={isCrawlerLoading} setIsCrawlerLoading={setIsCrawlerLoading} />
         </Dialog>
         <Dialog 
           open={pricingOpen}

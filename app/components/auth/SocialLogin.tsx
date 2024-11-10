@@ -6,38 +6,85 @@ import { useGoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
 import { API_BASE_URL } from '~/config';
 
-interface CodeResponse {
-    access_token: string;
+// Google Sign-In Types
+interface PromptMomentNotification {
+    isDisplayed(): boolean;
+    isNotDisplayed(): boolean;
+    getNotDisplayedReason(): string;
+    isDismissedMoment(): boolean;
+    getDismissedReason(): string;
+    isSkippedMoment(): boolean;
+    getSkippedReason(): string;
+}
+
+interface GoogleCredentialResponse {
     credential?: string;
 }
 
-interface GoogleUserInfo {
-    name: string;
-    picture: string;
-    email: string;
+interface GsiButtonConfiguration {
+    type: 'standard' | 'icon';
+    theme?: 'outline' | 'filled_blue' | 'filled_black';
+    size?: 'large' | 'medium' | 'small';
+    text?: 'signin_with' | 'signup_with' | 'continue_with' | 'signin';
+    shape?: 'rectangular' | 'pill' | 'circle' | 'square';
+    logo_alignment?: 'left' | 'center';
+    width?: string | number;
+    locale?: string;
 }
 
+// Extending Window interface
 declare global {
     interface Window {
         google?: {
             accounts: {
                 id: {
-                    initialize: (config: any) => void;
-                    renderButton: (element: HTMLElement, config: any) => void;
-                    prompt: () => void;
+                    initialize: (config: {
+                        client_id: string;
+                        callback: (response: GoogleCredentialResponse) => void;
+                        auto_select?: boolean;
+                        cancel_on_tap_outside?: boolean;
+                    }) => void;
+                    prompt: (
+                        momentListener?: (res: PromptMomentNotification) => void
+                    ) => void;
+                    renderButton: (
+                        parent: HTMLElement,
+                        options: GsiButtonConfiguration,
+                        clickHandler?: () => void
+                    ) => void;
+                    disableAutoSelect: () => void;
                 };
             };
         };
     }
 }
 
-const SocialLogin = () => {
+interface CodeResponse {
+    access_token: string;
+    credential?: string;
+}
+interface GithubData {
+    fullName: string;
+    Email: string;
+    ProfilePicture:string;
+}
+
+interface HeaderProps {
+    setSubmitError: (title: string) => void;
+}
+
+const SocialLogin: React.FC<HeaderProps> = ({ setSubmitError }) => {
     const theme = useTheme();
     const [user, setUser] = useState<CodeResponse | null>(null);
+    const [isGoogleInitialized, setIsGoogleInitialized] = useState(false);
+    const [guthubData, setGithubData] = useState<GithubData | null>(null)
 
-    // Initialize GSI client
+    const GITHUB_CLIENT_ID = 'Ov23lidS8sgRLAPkYCCh';
+    const REDIRECT_URI = `${window.location.origin}/auth/github`;
+
     useEffect(() => {
-        // Load GSI script
+        let timeoutId: NodeJS.Timeout;
+        
         const loadGoogleScript = () => {
             const script = document.createElement('script');
             script.src = 'https://accounts.google.com/gsi/client';
@@ -48,31 +95,65 @@ const SocialLogin = () => {
             script.onload = () => {
                 if (window.google) {
                     initializeGSI();
+                } else {
+                    setSubmitError('Failed to load Google authentication service');
                 }
+            };
+
+            script.onerror = () => {
+                setSubmitError('Failed to load Google authentication script');
             };
         };
 
         const initializeGSI = () => {
-            window.google?.accounts.id.initialize({
-                client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-                callback: handleGoogleCallback,
-                auto_select: false,
-                cancel_on_tap_outside: true,
-            });
+            try {
+                window.google?.accounts.id.initialize({
+                    client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+                    callback: handleGoogleCallback,
+                    auto_select: false,
+                    cancel_on_tap_outside: true,
+                });
+                setIsGoogleInitialized(true);
+            } catch (error) {
+                setSubmitError('Failed to initialize Google Sign-In');
+            }
         };
 
         loadGoogleScript();
+
+        return () => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+        };
     }, []);
 
-    const handleGoogleCallback = async (response: any) => {
-        console.log('Google response:', response);
-        if (response.credential) {
-            try {
-                // Decode the JWT token to get user info
+    const handleGitHubLogin = () => {
+        const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(
+          REDIRECT_URI
+        )}&scope=user:email`;
+        window.location.href = githubAuthUrl;
+      };
+    const handleFedCMError = (error: unknown) => {
+        if (error instanceof Error) {
+            if (error.message.includes('AbortError')) {
+                setSubmitError('Google Sign-In was cancelled or timed out. Please try again.');
+            } else if (error.message.includes('NetworkError')) {
+                setSubmitError('Network error occurred during Sign-In. Please check your connection and try again.');
+            } else if (error.message.includes('Not signed in')) {
+                setSubmitError('Sign-In was not completed. Please try again.');
+            } else {
+                setSubmitError(`You are not Sign-In any Google account in browser`);
+            }
+        } else {
+            setSubmitError('An unexpected error occurred during Google Sign-In');
+        }
+    };
+
+    const handleGoogleCallback = async (response: GoogleCredentialResponse) => {
+        try {
+            if (response.credential) {
                 const decoded = JSON.parse(atob(response.credential.split('.')[1]));
-                console.log('Decoded token:', decoded);
-                
-                // Send to your backend
                 await sendLogin(
                     decoded.name,
                     decoded.picture,
@@ -80,47 +161,47 @@ const SocialLogin = () => {
                     null,
                     response.credential
                 );
-            } catch (error) {
-                console.error('Error processing Google response:', error);
+            } else {
+                setSubmitError('Invalid Google authentication response');
             }
+        } catch (error) {
+            handleFedCMError(error);
+            console.error('Error processing Google response:', error);
         }
     };
 
-    // Regular OAuth login as backup
-    const googleLogin = useGoogleLogin({
-        onSuccess: (response: CodeResponse) => {
-            console.log('OAuth Success:', response);
-            setUser(response);
-        },
-        onError: (error) => console.error('OAuth Error:', error),
-        scope: 'email profile',
-        flow: 'implicit',
-    });
+    const handleGoogleLogin = async () => {
+        try {
+            if (!window.google?.accounts.id) {
+                setSubmitError('Google Sign-In is not properly initialized. Please refresh the page and try again.');
+                return;
+            }
 
-    useEffect(() => {
-        if (user?.access_token) {
-            axios.get(
-                'https://www.googleapis.com/oauth2/v1/userinfo',
-                {
-                    headers: {
-                        Authorization: `Bearer ${user.access_token}`,
-                        Accept: 'application/json',
-                    },
-                }
-            )
-            .then((res) => {
-                console.log('User Info:', res.data);
-                sendLogin(
-                    res.data.name,
-                    res.data.picture,
-                    res.data.email,
-                    null,
-                    user.credential
-                );
-            })
-            .catch((err) => console.error('Error fetching user info:', err));
+            const signInPromise = new Promise((resolve, reject) => {
+                const timeoutId = setTimeout(() => {
+                    reject(new Error('Sign-In request timed out'));
+                }, 30000);
+
+                window.google!.accounts.id.prompt((notification: PromptMomentNotification) => {
+                    clearTimeout(timeoutId);
+                    if (notification.isNotDisplayed()) {
+                        reject(new Error(`Sign-In prompt not displayed: ${notification.getNotDisplayedReason()}`));
+                    } else if (notification.isSkippedMoment()) {
+                        reject(new Error('Sign-In was skipped'));
+                    } else if (notification.isDismissedMoment()) {
+                        reject(new Error(`Sign-In was dismissed: ${notification.getDismissedReason()}`));
+                    } else {
+                        resolve(notification);
+                    }
+                });
+            });
+
+            await signInPromise;
+        } catch (error) {
+            handleFedCMError(error);
+            console.error('Google login error:', error);
         }
-    }, [user]);
+    };
 
     const sendLogin = async (
         full_name: string, 
@@ -130,8 +211,6 @@ const SocialLogin = () => {
         credential?: string
     ) => {
         try {
-            console.log('Sending login request:', { full_name, email });
-            
             const response = await fetch(`${API_BASE_URL}/google-sign`, {
                 method: 'POST',
                 headers: {
@@ -143,7 +222,7 @@ const SocialLogin = () => {
                     profile_pic, 
                     email, 
                     password,
-                    credential // Include Google credential if available
+                    credential
                 }),
             });
 
@@ -153,26 +232,18 @@ const SocialLogin = () => {
             }
 
             const result = await response.json();
-            console.log('Login success:', result);
-
             localStorage.setItem('token', result.access_token);
             localStorage.setItem('default_project', result.default_project_id);
-            
             window.location.reload();
             return result;
         } catch (error) {
+            if (error instanceof Error) {
+                setSubmitError(error.message);
+            } else {
+                setSubmitError('An unexpected error occurred during login');
+            }
             console.error('Login error:', error);
             throw error;
-        }
-    };
-
-    const handleGoogleLogin = () => {
-        console.log('Initiating Google login...');
-        // Try GSI first, fall back to OAuth
-        if (window.google?.accounts.id) {
-            window.google.accounts.id.prompt();
-        } else {
-            googleLogin();
         }
     };
 
@@ -202,12 +273,12 @@ const SocialLogin = () => {
                     border={`1px solid ${theme.palette.secondary.main}`}
                     borderRadius={2}
                     sx={{ cursor: 'pointer' }}
+                    onClick={handleGitHubLogin}
                 >
                     <Box component="img" src={Github} width={20} height={20} alt="Github Logo" />
                     <Typography ml={1}>Github</Typography>
                 </Box>
             </Grid>
-            {/* Hidden div for GSI button */}
             <div id="google-signin-button" style={{ display: 'none' }}></div>
         </Grid>
     );

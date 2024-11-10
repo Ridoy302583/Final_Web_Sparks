@@ -159,7 +159,7 @@ const Login: React.FC<LoginProps> = ({ signinOpen, handleSignInClose, handleSign
                 )}
 
                 <Box>
-                    <SocialLogin />
+                    <SocialLogin setSubmitError={setSubmitError} />
                 </Box>
                 <Box my={2}>
                     <Divider>

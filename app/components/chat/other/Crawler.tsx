@@ -11,6 +11,7 @@ interface CrawlerProps {
     setCrawlerImage: (image: string | null) => void;
     isCrawlerLoading: boolean;
     setIsCrawlerLoading: (loading: boolean) => void;
+    handleCrawlerClose: () => void;
 }
 
 interface ApiResponse {
@@ -38,7 +39,8 @@ class CrawlerError extends Error {
 const Crawler: React.FC<CrawlerProps> = ({
     setCrawlerImage,
     isCrawlerLoading,
-    setIsCrawlerLoading
+    setIsCrawlerLoading,
+    handleCrawlerClose,
 }) => {
     const [formData, setFormData] = useState<FormData>({ url: '' });
     const [error, setError] = useState<string>('');
@@ -116,6 +118,7 @@ const Crawler: React.FC<CrawlerProps> = ({
 
             const result = await crawlerData(formData.url);
             setCrawlerImage(`data:image/jpeg;base64,${result.image_base64}`);
+            handleCrawlerClose();
         } catch (error) {
             if (error instanceof CrawlerError) {
                 setError(error.detail || error.message);
@@ -137,10 +140,10 @@ const Crawler: React.FC<CrawlerProps> = ({
                     textAlign="center"
                     id="dialog-title"
                 >
-                    generate-from-crawler
+                    Generate from Crawler
                 </Typography>
                 <Typography textAlign="center" id="dialog-description">
-                    crawler-dialog-subtitle
+                    Paste a website link to generate a modern and beautiful website
                 </Typography>
             </Box>
             <form onSubmit={handleSubmit}>
@@ -149,7 +152,7 @@ const Crawler: React.FC<CrawlerProps> = ({
                         required
                         type="text"
                         id="url"
-                        placeholder="generate-from-crawler"
+                        placeholder="Generate from Crawler"
                         fullWidth
                         variant="outlined"
                         value={formData.url}
@@ -172,7 +175,7 @@ const Crawler: React.FC<CrawlerProps> = ({
                             },
                         }}
                     />
-                    <Box mt={2}>
+                    <Box mt={2} width={'100%'}>
                         <Box
                             display="flex"
                             justifyContent="center"
@@ -180,6 +183,7 @@ const Crawler: React.FC<CrawlerProps> = ({
                             p={1}
                             border="1px solid #000"
                             borderRadius={3}
+                            width={'100%'}
                             sx={{ 
                                 background: '#000', 
                                 cursor: isCrawlerLoading ? 'default' : 'pointer',
@@ -192,15 +196,15 @@ const Crawler: React.FC<CrawlerProps> = ({
                             {isCrawlerLoading && (
                                 <CircularProgress color="success" size={20} sx={{ mx: 1 }} />
                             )}
-                            <Typography component="span" mr={1} color="#FFF">
-                                generate
+                            <Typography component="span" mx={1} color="#FFF">
+                                Generate
                             </Typography>
                             <i className="bi bi-arrow-right" />
                         </Box>
                         {isCrawlerLoading && (
                             <Box display="flex" justifyContent="center" mt={1} mb={2}>
                                 <Typography>
-                                    crawler-may-take-some-time please-wait...
+                                    Crawler may take some time. Please Wait...
                                 </Typography>
                             </Box>
                         )}
